@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["svelte", "vite/client", "node"],
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "$domain/*": ["src/domain/*"],
+      "$usecases/*": ["src/usecases/*"],
+      "$components/*": ["src/components/*"],
+      "$views/*": ["src/Views/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
+}

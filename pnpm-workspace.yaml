@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  '@hugeicons/svelte': true
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - svelte-preprocess
+  - "@hugeicons/svelte"

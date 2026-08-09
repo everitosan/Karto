@@ -1,0 +1,20 @@
+{
+  "name": "@karto/landing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "lint": "echo \"(landing) no lint configured yet\"",
+    "test": "echo \"(landing) no tests yet\""
+  },
+  "dependencies": {
+    "@karto/ui": "workspace:*",
+    "astro": "^5.0.0",
+    "@astrojs/svelte": "^7.0.0",
+    "svelte": "^5.0.0"
+  }
+}

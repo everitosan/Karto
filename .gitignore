@@ -1,0 +1,30 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build outputs
+dist/
+build/
+.svelte-kit/
+.astro/
+storybook-static/
+.turbo/
+
+# rust / tauri
+apps/desktop/src-tauri/target/
+target/
+
+# env & local
+.env
+.env.*
+!.env.example
+*.local
+
+# editor / os
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+*.log
+
+# vaults (nunca commitear datos reales)
+*.karto

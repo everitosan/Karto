@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Karto · prueba de iconos Devicon</title>
+  <!-- Devicon desde CDN (solo para esta prueba visual) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/devicon.min.css" />
+  <style>
+    :root {
+      --accent: #11b245;
+      --text: #e6eaf2;
+      --muted: #8a93a6;
+      --surface: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      /* Fondo de Karto: azul dominante sólido hasta 55% y luego funde a negro */
+      background: linear-gradient(180deg, #090d15 0%, #090d15 55%, #000 100%);
+      color: var(--text);
+      font-family: "Ubuntu Sans", system-ui, sans-serif;
+      padding: 32px 40px 80px;
+    }
+    h1 { font-weight: 700; letter-spacing: -0.02em; }
+    h2 {
+      margin-top: 40px; font-size: 14px; text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--muted); border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    p.note { color: var(--muted); max-width: 70ch; line-height: 1.5; }
+    .toggle { color: var(--muted); font-size: 13px; margin: 16px 0; }
+    .toggle button {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; margin-right: 8px;
+    }
+    .toggle button.active { border-color: var(--accent); color: var(--accent); }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px; margin-top: 16px;
+    }
+    .cell {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px 8px; text-align: center; display: flex; flex-direction: column;
+      align-items: center; gap: 10px;
+    }
+    .cell i { font-size: 44px; line-height: 1; }
+    /* Simula el icono dentro de un "nodo" del canvas */
+    .node-demo { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+    .node {
+      display: flex; align-items: center; gap: 12px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; min-width: 220px;
+    }
+    .node i { font-size: 32px; }
+    .node .meta { text-align: left; }
+    .node .meta .name { font-weight: 600; }
+    .node .meta .sub { color: var(--muted); font-size: 12px; }
+    .label { font-size: 11px; color: var(--muted); word-break: break-all; }
+    /* Clase para forzar monocromo (compara vs 'colored') */
+    body.mono i { color: var(--text) !important; }
+  </style>
+</head>
+<body>
+  <h1>Karto · iconos Devicon a color sobre fondo oscuro</h1>
+  <p class="note">
+    Prueba visual: los iconos <code>colored</code> de Devicon usan los colores de marca originales.
+    Observa cuáles se leen bien sobre el degradado oscuro de Karto y cuáles casi desaparecen
+    (los logos oscuros/negros como Rust, AWS, Apache Kafka, Flask son el punto crítico).
+    Usa el botón para comparar con la versión monocroma.
+  </p>
+
+  <div class="toggle">
+    <button id="btn-color" class="active" onclick="setMono(false)">A color (Devicon)</button>
+    <button id="btn-mono" onclick="setMono(true)">Monocromo (currentColor)</button>
+  </div>
+
+  <h2>Datos — gestores (Datastore único, icono por gestor)</h2>
+  <div class="grid" id="grid-db"></div>
+
+  <h2>Aplicación — runtime / framework</h2>
+  <div class="grid" id="grid-app"></div>
+
+  <h2>Web / Proxy · Cómputo · Mensajería · Cloud · Observabilidad</h2>
+  <div class="grid" id="grid-infra"></div>
+
+  <h2>Cómo se vería dentro de un nodo del canvas</h2>
+  <div class="node-demo">
+    <div class="node"><i class="devicon-postgresql-plain colored"></i><div class="meta"><div class="name">db-core-01</div><div class="sub">PostgreSQL 16 · 10.0.2.5</div></div></div>
+    <div class="node"><i class="devicon-redis-plain colored"></i><div class="meta"><div class="name">cache-01</div><div class="sub">Redis 7 · 10.0.2.9</div></div></div>
+    <div class="node"><i class="devicon-svelte-plain colored"></i><div class="meta"><div class="name">frontend</div><div class="sub">Svelte 5 · :5173</div></div></div>
+    <div class="node"><i class="devicon-rust-plain colored"></i><div class="meta"><div class="name">api</div><div class="sub">Rust · :8080</div></div></div>
+    <div class="node"><i class="devicon-kubernetes-plain colored"></i><div class="meta"><div class="name">prod-cluster</div><div class="sub">k3s v1.30</div></div></div>
+  </div>
+
+  <script>
+    const db = [
+      "postgresql-plain", "mysql-original", "mariadb-original", "sqlite-plain",
+      "mongodb-plain", "redis-plain", "neo4j-plain", "elasticsearch-plain",
+      "cassandra-plain", "influxdb-plain",
+    ];
+    const app = [
+      "react-original", "svelte-plain", "vuejs-plain", "angular-plain",
+      "nodejs-plain", "python-plain", "go-original-wordmark", "rust-plain",
+      "java-plain", "spring-plain", "dot-net-plain", "php-plain",
+    ];
+    const infra = [
+      "nginx-original", "apache-plain", "docker-plain", "podman-plain",
+      "kubernetes-plain", "rabbitmq-original", "apachekafka-original",
+      "amazonwebservices-original", "googlecloud-plain", "azure-plain",
+      "prometheus-original", "grafana-original",
+    ];
+    function fill(id, list) {
+      const el = document.getElementById(id);
+      el.innerHTML = list.map(n =>
+        `<div class="cell"><i class="devicon-${n} colored"></i><span class="label">${n}</span></div>`
+      ).join("");
+    }
+    fill("grid-db", db); fill("grid-app", app); fill("grid-infra", infra);
+    function setMono(m) {
+      document.body.classList.toggle("mono", m);
+      document.getElementById("btn-mono").classList.toggle("active", m);
+      document.getElementById("btn-color").classList.toggle("active", !m);
+      // en monocromo quitamos 'colored' para que herede currentColor
+      document.querySelectorAll("i").forEach(i => i.classList.toggle("colored", !m));
+    }
+  </script>
+</body>
+</html>

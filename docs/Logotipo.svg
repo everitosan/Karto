@@ -1,0 +1,80 @@
+<svg width="428" xmlns="http://www.w3.org/2000/svg" height="160" id="screenshot-c927be4b-d629-80cc-8008-7351ba619254" viewBox="0 0 428 160" xmlns:xlink="http://www.w3.org/1999/xlink" fill="none" version="1.1"><style>/* latin-ext */
+@font-face {
+  font-family: 'Titillium Web';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(https://design.penpot.app/internal/gfonts/font/titilliumweb/v19/NaPecZTIAOhVxoMyOr9n_E7fdM3mDbRS.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Titillium Web';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(https://design.penpot.app/internal/gfonts/font/titilliumweb/v19/NaPecZTIAOhVxoMyOr9n_E7fdMPmDQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Ubuntu Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: block;
+  src: url(https://design.penpot.app/internal/gfonts/font/ubuntusans/v4/co3omWd6mSRtB7_9UaLWwJnCq5ALePfPu1tPcW235R53LqrCPWbujzt6OfCBVYT9.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Ubuntu Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: block;
+  src: url(https://design.penpot.app/internal/gfonts/font/ubuntusans/v4/co3omWd6mSRtB7_9UaLWwJnCq5ALePfPu1tPcW235R53LqrCPWbujzt6OfmBVYT9.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Ubuntu Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: block;
+  src: url(https://design.penpot.app/internal/gfonts/font/ubuntusans/v4/co3omWd6mSRtB7_9UaLWwJnCq5ALePfPu1tPcW235R53LqrCPWbujzt6OfGBVYT9.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Ubuntu Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: block;
+  src: url(https://design.penpot.app/internal/gfonts/font/ubuntusans/v4/co3omWd6mSRtB7_9UaLWwJnCq5ALePfPu1tPcW235R53LqrCPWbujzt6Of6BVYT9.woff2) format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Ubuntu Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: block;
+  src: url(https://design.penpot.app/internal/gfonts/font/ubuntusans/v4/co3omWd6mSRtB7_9UaLWwJnCq5ALePfPu1tPcW235R53LqrCPWbujzt6OfOBVYT9.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Ubuntu Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  font-display: block;
+  src: url(https://design.penpot.app/internal/gfonts/font/ubuntusans/v4/co3omWd6mSRtB7_9UaLWwJnCq5ALePfPu1tPcW235R53LqrCPWbujzt6Of2BVQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style><g id="shape-c927be4b-d629-80cc-8008-7351ba619254" rx="0" ry="0"><g id="shape-c927be4b-d629-80cc-8008-7351ba61925a" style="display: none;"><g class="fills" id="fills-c927be4b-d629-80cc-8008-7351ba61925a"><rect rx="77" ry="77" x="0" y="0" transform="matrix(1.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000)" width="428.0000000000018" height="160" style="fill: rgb(17, 178, 69); fill-opacity: 1;"/></g></g><g id="shape-c927be4b-d629-80cc-8008-7351ba61925b"><g transform="matrix(1.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000)" class="text-container" x="161" y="36" width="214" height="87" rx="0" ry="0"><defs><pattern patternUnits="objectBoundingBox" width="213.46665954589844" height="110" id="fill-0-render-3-0"><g><rect width="213.46665954589844" height="110" style="fill: rgb(17, 178, 69); fill-opacity: 1;"/></g></pattern></defs><g class="fills" id="fills-c927be4b-d629-80cc-8008-7351ba61925b"><text x="161" y="134.1999969482422" dominant-baseline="ideographic" textLength="213.46665954589844" lengthAdjust="spacingAndGlyphs" style="text-transform: none; font-family: &quot;Titillium Web&quot;; letter-spacing: normal; font-style: normal; font-weight: 400; white-space: pre; font-size: 72px; text-decoration: none; direction: ltr; fill: rgb(17, 178, 69); fill-opacity: 1;">| Karto </text></g></g></g><g id="shape-c927be4b-d629-80cc-8008-735363d45d6d"><g transform="matrix(1.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000)" class="text-container" x="200.0000000000009" y="123" width="98" height="20" rx="0" ry="0"><defs><pattern patternUnits="objectBoundingBox" width="97.44999694824219" height="19" id="fill-0-render-4-0"><g><rect width="97.44999694824219" height="19" style="fill: rgb(17, 178, 69); fill-opacity: 1;"/></g></pattern></defs><g class="fills" id="fills-c927be4b-d629-80cc-8008-735363d45d6d"><text x="200.0000000000009" y="142.10000610351562" dominant-baseline="ideographic" textLength="97.44999694824219" lengthAdjust="spacingAndGlyphs" style="text-transform: none; font-family: &quot;Ubuntu Sans&quot;; letter-spacing: -0.5px; font-style: normal; font-weight: 400; white-space: pre; font-size: 16px; text-decoration: none; direction: ltr; fill: rgb(17, 178, 69); fill-opacity: 1;">Map your infra</text></g></g></g><g id="shape-c927be4b-d629-80cc-8008-7351ba61925c" width="1em" height="1em" rx="0" ry="0" style="fill: rgb(0, 0, 0);"><g id="shape-c927be4b-d629-80cc-8008-7351ba61925d" style="display: none;"><g class="fills" id="fills-c927be4b-d629-80cc-8008-7351ba61925d"><rect width="103" height="103" x="48" transform="matrix(1.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000)" style="fill: none;" ry="0" fill="none" rx="0" y="32"/></g></g><g id="shape-c927be4b-d629-80cc-8008-7351ba61925e"><g class="fills" id="fills-c927be4b-d629-80cc-8008-7351ba61925e"><path d="M48,32L151,32L151,135L48,135L48,32" fill="none" style="fill: none;"/></g></g><g id="shape-c927be4b-d629-80cc-8008-7351ba61925f" rx="0" ry="0" style="fill: rgb(0, 0, 0);"><g id="shape-c927be4b-d629-80cc-8008-7351ba619260"><g class="fills" id="fills-c927be4b-d629-80cc-8008-7351ba619260"><path d="M142.416748046875,83.5C142.416748046875,107.202880859375,123.20263671875,126.416748046875,99.5,126.416748046875C75.79736328125,126.416748046875,56.5833740234375,107.202880859375,56.5833740234375,83.5C56.5833740234375,59.797119140625,75.79736328125,40.5833740234375,99.5,40.5833740234375C123.20263671875,40.5833740234375,142.416748046875,59.797119140625,142.416748046875,83.5" fill="none" stroke-linejoin="round" stroke-linecap="round" style="fill: none;"/></g><g fill="none" stroke-linejoin="round" stroke-linecap="round" id="strokes-8a1ec0e3-6348-80bb-8008-73596ee044ac-c927be4b-d629-80cc-8008-7351ba619260" class="strokes"><g class="inner-stroke-shape"><defs><clipPath id="inner-stroke-render-9-c927be4b-d629-80cc-8008-7351ba619260-0"><use href="#stroke-shape-render-9-c927be4b-d629-80cc-8008-7351ba619260-0"/></clipPath><path d="M142.416748046875,83.5C142.416748046875,107.202880859375,123.20263671875,126.416748046875,99.5,126.416748046875C75.79736328125,126.416748046875,56.5833740234375,107.202880859375,56.5833740234375,83.5C56.5833740234375,59.797119140625,75.79736328125,40.5833740234375,99.5,40.5833740234375C123.20263671875,40.5833740234375,142.416748046875,59.797119140625,142.416748046875,83.5" id="stroke-shape-render-9-c927be4b-d629-80cc-8008-7351ba619260-0" style="fill: none; stroke-width: 9; stroke: rgb(17, 178, 69); stroke-opacity: 1;"/></defs><use href="#stroke-shape-render-9-c927be4b-d629-80cc-8008-7351ba619260-0" clip-path="url('#inner-stroke-render-9-c927be4b-d629-80cc-8008-7351ba619260-0')"/></g></g></g><g id="shape-c927be4b-d629-80cc-8008-7351ba619261"><g class="fills" id="fills-c927be4b-d629-80cc-8008-7351ba619261"><path d="M99.5,126.416748046875C113.722412109375,126.416748046875,125.25,107.202880859375,125.25,83.5C125.25,59.797119140625,113.722412109375,40.5833740234375,99.5,40.5833740234375M90.9166259765625,94.229248046875C90.9166259765625,97.7845458984375,88.0343017578125,100.666748046875,84.4791259765625,100.666748046875C80.924072265625,100.666748046875,78.0416259765625,97.7845458984375,78.0416259765625,94.229248046875C78.0416259765625,90.673828125,80.924072265625,87.791748046875,84.4791259765625,87.791748046875C88.0343017578125,87.791748046875,90.9166259765625,90.673828125,90.9166259765625,94.229248046875M95.744873046875,62.041748046875L95.208251953125,62.041748046875M96.28125,62.041748046875C96.28125,62.6341552734375,95.80126953125,63.1146240234375,95.208251953125,63.1146240234375C94.615234375,63.1146240234375,94.135498046875,62.6341552734375,94.135498046875,62.041748046875C94.135498046875,61.44921875,94.615234375,60.96875,95.208251953125,60.96875C95.80126953125,60.96875,96.28125,61.44921875,96.28125,62.041748046875" fill="none" stroke-linejoin="round" stroke-linecap="round" style="fill: none;"/></g><g fill="none" stroke-linejoin="round" stroke-linecap="round" id="strokes-8a1ec0e3-6348-80bb-8008-73596ee16285-c927be4b-d629-80cc-8008-7351ba619261" class="strokes"><g class="stroke-shape"><path d="M99.5,126.416748046875C113.722412109375,126.416748046875,125.25,107.202880859375,125.25,83.5C125.25,59.797119140625,113.722412109375,40.5833740234375,99.5,40.5833740234375M90.9166259765625,94.229248046875C90.9166259765625,97.7845458984375,88.0343017578125,100.666748046875,84.4791259765625,100.666748046875C80.924072265625,100.666748046875,78.0416259765625,97.7845458984375,78.0416259765625,94.229248046875C78.0416259765625,90.673828125,80.924072265625,87.791748046875,84.4791259765625,87.791748046875C88.0343017578125,87.791748046875,90.9166259765625,90.673828125,90.9166259765625,94.229248046875M95.744873046875,62.041748046875L95.208251953125,62.041748046875M96.28125,62.041748046875C96.28125,62.6341552734375,95.80126953125,63.1146240234375,95.208251953125,63.1146240234375C94.615234375,63.1146240234375,94.135498046875,62.6341552734375,94.135498046875,62.041748046875C94.135498046875,61.44921875,94.615234375,60.96875,95.208251953125,60.96875C95.80126953125,60.96875,96.28125,61.44921875,96.28125,62.041748046875" style="fill: none; stroke-width: 4.5; stroke: rgb(17, 178, 69); stroke-opacity: 1; stroke-linecap: round;"/></g></g></g></g></g></g></svg>

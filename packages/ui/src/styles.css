@@ -1,0 +1,57 @@
+/* Fuentes empaquetadas (offline, sin depender de internet en la app de escritorio). */
+@import "@fontsource/titillium-web/400.css";
+@import "@fontsource/titillium-web/600.css";
+@import "@fontsource/titillium-web/700.css";
+@import "@fontsource/ubuntu-sans/400.css";
+@import "@fontsource/ubuntu-sans/500.css";
+@import "@fontsource/ubuntu-sans/700.css";
+
+:root {
+  /* Fondo: degradado lineal de arriba (#090d15) a abajo (#000).
+     El azul domina: se mantiene sólido hasta el 55% antes de fundir a negro. */
+  --karto-bg-top: #090d15;
+  --karto-bg-bottom: #000000;
+  --karto-bg: linear-gradient(
+    180deg,
+    var(--karto-bg-top) 0%,
+    var(--karto-bg-top) 55%,
+    var(--karto-bg-bottom) 100%
+  );
+
+  /* Color de acento de marca. */
+  --karto-color-accent: #11b245;
+  --karto-color-accent-hover: #0e9a3b;
+
+  /* Superficies y texto. */
+  --karto-color-surface: #12161f;
+  --karto-color-border: #1e2633;
+  --karto-color-text: #e6eaf0;
+  --karto-color-text-muted: rgba(230, 234, 240, 0.6);
+
+  /* Tipografías: Titillium Web para títulos, Ubuntu Sans para texto. */
+  --karto-font-title: "Titillium Web", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --karto-font-body: "Ubuntu Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Tamaño de fuente base de la app (1rem). Todo el resto de la UI está en
+     `rem`, así que ajustar esto reescala la interfaz de forma coherente. */
+  --karto-font-size-base: 18px;
+
+  --karto-radius: 0.5rem;
+
+  /* Escala de espaciado con base de 4px. Como CSS no tiene funciones propias,
+     la "función" es la base + calc por múltiplos: calc(var(--karto-space-base) * n).
+     Se exponen los pasos más usados ya calculados. Usa siempre estos tokens
+     (o la fórmula con la base) en vez de valores mágicos. */
+  --karto-space-base: 4px;
+  --karto-space-1: var(--karto-space-base); /* 4px */
+  --karto-space-2: calc(var(--karto-space-base) * 2); /* 8px */
+  --karto-space-3: calc(var(--karto-space-base) * 3); /* 12px */
+  --karto-space-4: calc(var(--karto-space-base) * 4); /* 16px */
+  --karto-space-5: calc(var(--karto-space-base) * 5); /* 20px */
+  --karto-space-6: calc(var(--karto-space-base) * 6); /* 24px */
+  --karto-space-8: calc(var(--karto-space-base) * 8); /* 32px */
+
+  /* Alias de compatibilidad. */
+  --karto-font: var(--karto-font-body);
+  --karto-color-bg: var(--karto-bg-top);
+}

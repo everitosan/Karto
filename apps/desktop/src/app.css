@@ -1,0 +1,22 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+/* Fuente base de la app: 1rem = 18px. Toda la UI (en `rem`) escala desde aquí. */
+html {
+  font-size: var(--karto-font-size-base, 18px);
+}
+
+body {
+  font-family: var(--karto-font-body);
+  background: var(--karto-bg);
+  background-attachment: fixed;
+  color: var(--karto-color-text);
+}
