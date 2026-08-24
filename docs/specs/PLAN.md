@@ -119,6 +119,122 @@ no hace falta cifrado por campo adicional en el MVP.
 
 ## Estado de implementación
 
+**i18n del desktop — fundación (2026-08-24):**
+
+- ✅ **Motor**: [Paraglide JS](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) v2 (compile-time,
+  tree-shakeable, tipado). `messages/{es,en}.json` → `src/paraglide/` (generado, gitignored;
+  se recompila en `check`/`test`/`build`). Plugin de Vite en `vite.config.ts`; `baseLocale = es`.
+- ✅ **Idioma del SO por defecto**: `tauri-plugin-os` (Rust + `@tauri-apps/plugin-os`) con permiso
+  `os:allow-locale`. `$i18n/detect` fija el idioma antes de montar con precedencia **elección del
+  usuario (localStorage) → locale del SO → es**. Se eligió plugin-os sobre `navigator.language` por
+  fiabilidad en los 3 SO (clave para el empaquetado de **Windows**).
+- ✅ **Catálogo desacoplado (parcial)**: las etiquetas visibles de **categoría y tipo** se traducen en
+  `$i18n/catalog` (fuente de verdad), con la label de `@karto/catalog` como respaldo. Consumidores
+  repunteados: NodePalette, PropertiesPanel, GlobalSearch, FlowEditor. El dominio (`infra.ts`) ya no
+  re-exporta labels en español.
+- ✅ **Selector de idioma**: nueva tab **General** en Configuración (endónimos Español/English);
+  cambiar idioma persiste en localStorage y recarga la ventana.
+- ✅ **Verificado**: `svelte-check` 0 errores, `vite build` OK, backend `cargo check` OK, `pnpm dev` arranca.
+
+**i18n del desktop — extracción de vistas (2026-08-24):**
+
+- ✅ **Todas las vistas `.svelte` traducidas** (es/en) más los diálogos nativos (`usecases/dialog.ts`) y
+  los hints de nivel de log (`usecases/diagnostics.ts`). **351 claves** en `messages/{es,en}.json`, paridad
+  exacta es↔en. Convenciones: claves planas por área (`welcome_*`, `props_*`, `scripts_*`, `ssh_*`, `common_*`…);
+  párrafos con `<strong>`/`<code>` resueltos partiendo el texto alrededor del markup, o `{@html}` cuando no hay
+  dato de usuario; parámetros ICU `{name}`/`{count}` para interpolaciones; nombres propios (PostgreSQL, React…)
+  y estados técnicos (badges de scripts) sin traducir.
+- ✅ **Gotcha resuelto**: varias vistas usaban `{#each … as m}` que colisionaba con el import `m` de Paraglide
+  → renombradas las variables locales (Sidebar, ScriptsSection, SshImportModal).
+- ✅ **Verificado**: `svelte-check` 0 errores, `vite build` OK.
+
+**i18n del desktop — catálogo `@karto/catalog` (2026-08-24):**
+
+- ✅ **Propiedades y opciones traducidas**. Los `label`/`placeholder` de `PropertySpec` y las `label` de
+  opción traducibles pasaron a ser **slugs** (`cp_`/`cph_`/`co_`) en el catálogo; los nombres propios
+  (PostgreSQL, nginx, AWS…) quedan literales. La app resuelve con `catalogText()` en `$i18n/catalog`
+  (Paraglide, con fallback al literal). **131 claves** nuevas → **482 claves** totales, paridad es↔en exacta.
+- ✅ Transformación del catálogo hecha con script (position-aware regex) para no tocar labels de nodo/categoría
+  (que ya se traducen por id `nodeKind_*`/`category_*`). Único consumidor de labels de propiedad/opción:
+  `PropertiesPanel` (usa `catalogText`).
+- ✅ **Verificado**: `catalog` tsc limpio, `svelte-check` 0 errores, `vite build` OK, resolución es/en comprobada.
+- **i18n del desktop: COMPLETO.** Queda como opción futura retirar también el español residual de las `label`
+  de nodo/categoría del catálogo (hoy son respaldo muerto, no se muestran). La landing conserva su i18n propio.
+
+**Licencia — AGPL-3.0 (2026-08-23):**
+
+- ✅ **Decisión**: AGPL-3.0-only + vía de doble licencia (fork cerrado/comercial requiere
+  acuerdo aparte; como único autor se puede vender licencia comercial sin CLA por ahora).
+- ✅ `LICENSE` (texto canónico GNU) en la raíz; `"license": "AGPL-3.0-only"` en los 6
+  `package.json`; `license`/`authors` en `Cargo.toml`; `bundle.publisher/copyright/license(File)`
+  en `tauri.conf.json`; About de la app corregido (decía "Licencia MIT"); FAQ de la landing
+  responde "Sí, AGPL-3.0" con la regla de derivados abiertos.
+- Pendiente si se aceptan contribuciones externas: CLA o DCO con cesión para conservar el
+  derecho de re-licenciar comercialmente.
+
+**Landing — implementación "carta estelar" (2026-08-23):**
+
+- ✅ **Estrategia** en `apps/landing/STRATEGY.md`; 3 propuestas de hero en `docs/landing-hero-*.html`
+  (revisión humana) → se eligió la **A (carta estelar)**.
+- ✅ **Página completa** (`index.astro`) con los actos de la estrategia: hero con constelación
+  animada, barra de hechos duros, Cartografía, Navegación (constelación que "enciende" al
+  hacer scroll), El observatorio (seguridad, copy conservado con H2 "Un observatorio, no una
+  nube"), perfiles (sysadmin/consultor/homelab), Despega + FAQ, footer "Hecho en la Tierra".
+  Se corrigió "Doble click y dentro" → "Un click y estás dentro" (regla: botón explícito).
+- ✅ **Componentes**: `Starfield.astro` (3 capas twinkle + 2 estrellas fugaces), `Reticle.astro`
+  (retícula astronómica, rotación 240s), `Constellation.astro` (aristas que se trazan, halos
+  que respiran, pulsos verdes por `offset-path` — Safari viejo lo degrada sin romper).
+- ✅ **Robustez**: contenido visible por defecto; el reveal por scroll solo se activa si JS
+  añade `html.reveal-armed` (sin JS/SEO no se oculta nada). `prefers-reduced-motion` apaga
+  todas las animaciones. Meta title/description con keywords de STRATEGY §6.
+- Pendiente: OG image real (constelación exportada), enlace de descarga real del `.deb`/AppImage,
+  screenshot de la app en el acto Navegación.
+
+**Endurecimiento de seguridad — hallazgos media de la auditoría (2026-08-23):**
+
+- ✅ **RCE por vault compartido (opciones SSH):** `connections::is_dangerous_ssh_option`
+  (blocklist: `ProxyCommand`, `LocalCommand`, `PermitLocalCommand`, `KnownHostsCommand`,
+  `Match`) filtra en `parse_ssh_options` (punto único de entrada) y se valida también en
+  `credential_upsert` (rechaza guardar opciones tóxicas). Cubre el export selectivo, que
+  arrastra la columna `options` de las credenciales.
+- ✅ **RCE por plantilla de vault importado:** `connect_node` no ejecuta en silencio una
+  plantilla embebida si el vault no es de confianza; devuelve `TemplateConfirmationRequired`.
+  La confianza es **machine-local por ruta** (`app_store`, clave `templatesTrusted:{path}`),
+  **no** dentro del vault, para que `vault_export` (VACUUM INTO) no la arrastre al `.karto`.
+  Se marca de confianza al **crear** el vault y al **ligar** una plantilla localmente.
+  Frontend: `TemplateTrustModal` muestra el comando y pide confirmación; `vault_trust_templates`.
+- ✅ **CSP del webview:** `tauri.conf.json` pasa de `csp: null` a una política estricta
+  (`default-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'`; `font-src`/`img-src`
+  con `data:`/`asset:` para Devicon empaquetado, sin CDN).
+- ✅ **Materialización de llave privada:** `materialize_key` crea el directorio padre 0700 y,
+  si el archivo ya existe, verifica que sea 0600 (rechaza permisos laxos → evita reusar una
+  llave plantada / world-readable).
+- ⚠️ **Secretos de BD en la tabla de procesos:** pg/mysql/redis ya usan variable de entorno
+  (fuera de argv). **Mongo** mete la contraseña en la URI (visible en `ps`); `mongosh` no
+  admite env/fichero → queda documentado como limitación del cliente (mitigación parcial).
+- **Verificación**: **135 cargo** + **16 vitest** (incl. blocklist, filtro, upsert rechazado,
+  confianza por-ruta, materialización 0700/0600, parser del aviso de confirmación); svelte-check 0 errores.
+
+**Endurecimiento cripto — Argon2id como KDF del vault (2026-08-23):**
+
+- ✅ **Decisión**: sin release en producción, se adopta Argon2id como **formato por defecto** del vault,
+  sin migración ni versionado de params (se retomará si se suben los costes). Reemplaza la KDF nativa de
+  SQLCipher (PBKDF2-HMAC-SHA512), que solo carga CPU y es barata de acelerar en GPU/ASIC.
+- ✅ **`infra/kdf.rs`** (nuevo): `derive_key` genera una clave cruda de 32 bytes con **Argon2id**
+  (memoria 64 MiB, t=3, p=1; `Zeroizing`), `random_salt` (16 B), `key_pragma`/`salt_pragma`
+  (literales `x'…'`) y `read_header_salt` (lee los 16 bytes en claro del header del `.karto`).
+- ✅ **`SqlcipherStore`**: entrega la clave en **modo raw key** (`PRAGMA key = "x'…'"`), evitando el
+  PBKDF2 de SQLCipher. El salt de Argon2 **se reutiliza del salt de cabecera** (único archivo portable,
+  sin sidecar): en `create` se fija con `PRAGMA cipher_salt` **después** de `key` (hallazgo de campo:
+  SQLCipher lo ignora si se pone antes), en `open`/`rekey` se relee del header. `rekey` re-deriva con
+  Argon2id sobre el mismo salt y re-cifra con `PRAGMA rekey = "x'…'"`.
+- ✅ **Sin cambios de frontend ni de comandos Tauri**: la contraseña se sigue pasando como string; toda
+  la derivación vive en el backend Rust.
+- **Verificación**: **130 cargo** (incl. roundtrip real de SQLCipher con Argon2, salt persistido en
+  header, y `rekey_reencrypts_with_real_sqlcipher`), clippy sin warnings nuevos (los 2 de `lib.rs` y el
+  `SCHEMA_VERSION` son preexistentes). **No verificado en vivo**: medir latencia real de unlock en el
+  equipo (Argon2 64 MiB debería rondar decenas de ms en release; en debug es notablemente más lento).
+
 **Branding del autor — splash + "Acerca de" (2026-08-23):**
 
 - ✅ **Splash**: bajo el logo completo aparece `by evesan` (texto atenuado, misma animación de entrada).
@@ -675,8 +791,13 @@ Actualizado (scaffold Fase 1): 2026-08-07.
 - [x] Limpieza automática del portapapeles tras copiar secretos.
 - [x] Cambio de contraseña maestra (re-cifrado con `PRAGMA rekey`).
 - [x] Export/backup cifrado del vault.
-- [ ] Migración a Argon2id (aplazada por decisión: se mantiene la KDF nativa de
-  SQLCipher; requiere rediseñar el formato del vault y migrar vaults existentes).
+- [x] Migración a Argon2id (2026-08-23). Sin vaults en producción, se adopta como formato por
+  defecto sin lógica de migración. `infra/kdf.rs` deriva una clave cruda de 32 bytes con Argon2id
+  (64 MiB, t=3, p=1) y `SqlcipherStore` la pasa en modo *raw key* (`PRAGMA key = "x'…'"`, sin PBKDF2
+  encima). El salt (16 B) se reutiliza del salt de cabecera de SQLCipher (claro, primeros 16 bytes):
+  en `create` se fija con `PRAGMA cipher_salt` **después** de `key` (SQLCipher lo ignora si va antes)
+  y en `open`/`rekey` se relee del header para re-derivar. Vault sigue siendo un único archivo
+  portable. Verificado con roundtrip real de SQLCipher + rekey (**130 cargo**).
 - [ ] Builds y firma para Windows/macOS; AppImage/deb para Linux → **se agrupa en Fase 7**
   (regla Linux-first: requiere hardware/VM de cada SO).
 
