@@ -1,0 +1,98 @@
+name: Release
+
+# Sólo dispara con push de un tag vX.Y.Z[-rc.N]. Los tags únicamente los
+# empujan los scripts de deploy (make deploy-rc-app / make deploy-app), que
+# corren en local sobre 'main'. No se usa pull_request_target ni runners
+# self-hosted: la superficie de ataque queda mínima.
+on:
+  push:
+    tags:
+      - "v*"
+
+# Permisos mínimos por defecto (endurecimiento de cadena de suministro).
+permissions:
+  contents: read
+
+jobs:
+  release:
+    # Sólo este job necesita escribir para crear el release/subir artefactos.
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+    steps:
+      # Todas las actions ancladas por SHA de commit (no por tag mutable).
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Metadatos del release (versión, prerelease, notas)
+        id: meta
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          ver="${TAG#v}"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          if [[ "$ver" == *-rc.* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            body="$(bash utils/scripts/changelog.sh unreleased)"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            body="$(bash utils/scripts/changelog.sh section "$ver")"
+          fi
+          {
+            echo "body<<KARTO_NOTES_EOF"
+            echo "$body"
+            echo "KARTO_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Dependencias del sistema (Tauri v2 / Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libgtk-3-dev \
+            build-essential \
+            file
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - name: Cache de cargo
+        uses: Swatinem/rust-cache@aa7c1c80a07a27a84c0aa76d0cef0aad3830e330 # v2.7.8
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Instalar dependencias (lockfile congelado)
+        run: pnpm install --frozen-lockfile
+
+      - name: Compilar catálogo i18n (paraglide)
+        run: pnpm --filter @karto/desktop paraglide
+
+      - name: Compilar y publicar release
+        uses: tauri-apps/tauri-action@bef7b83ae45d5399cc8e382d06e8a13f1fd1cb7e # v0.5.20
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: Karto ${{ github.ref_name }}
+          releaseBody: ${{ steps.meta.outputs.body }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          releaseDraft: false
+          # Bundles reproducibles en Linux (evita depender de bundle.targets="all").
+          args: --bundles deb,appimage
