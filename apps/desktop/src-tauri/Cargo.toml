@@ -1,6 +1,6 @@
 [package]
 name = "karto"
-version = "0.0.0"
+version = "0.1.0-rc.1"
 description = "Karto — mapeo cifrado de infraestructura"
 authors = ["evesan <everardo.ipn@gmail.com>"]
 license = "AGPL-3.0-only"
