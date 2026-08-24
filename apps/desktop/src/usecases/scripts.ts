@@ -54,6 +54,10 @@ export interface ScriptTarget {
   kind: string;
   /** Gestor de BD (`postgresql`, `mysql`…) si el nodo lo declara. */
   gestor: string | null;
+  /** Sistema operativo declarado (propiedad `os`); relevante en server/vm. */
+  os: string | null;
+  /** Nombre de la BD/instancia registrada (propiedad `instancia`); en `database`. */
+  instance: string | null;
   /** Tiene credencial SSH con llave (para bash/python). */
   sshKey: boolean;
   /** Tiene credencial de BD (`kind='db'`) para los motores de BD. */

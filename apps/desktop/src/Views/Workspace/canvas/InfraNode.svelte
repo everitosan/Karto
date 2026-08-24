@@ -46,11 +46,14 @@
   const icon = $derived(resolveNodeIcon(data.kind, data.properties));
 
   // Resumen de la caja: la dirección del contexto activo (o hostname de respaldo),
-  // y si no, otra propiedad representativa. Reacciona al contexto activo.
+  // y si no, otra propiedad representativa (dominio del CDN, URL de la app…).
+  // Reacciona al contexto activo.
   const summary = $derived(
     resolveAddress(data.endpoints ?? {}, data.properties ?? {}) ??
       data.properties?.host ??
       data.properties?.url_admin ??
+      data.properties?.dominios ??
+      data.properties?.url ??
       null,
   );
 </script>

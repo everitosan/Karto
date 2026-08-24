@@ -3,14 +3,20 @@
   "compilerOptions": {
     "types": ["svelte", "vite/client", "node"],
     "noEmit": true,
+    // Paraglide genera `src/paraglide/*.js` con tipos vía JSDoc; se permiten JS
+    // (sin type-check profundo: `checkJs` desactivado) para poder importarlos.
+    "allowJs": true,
+    "checkJs": false,
     "baseUrl": ".",
     "paths": {
       "$domain/*": ["src/domain/*"],
       "$usecases/*": ["src/usecases/*"],
       "$components/*": ["src/components/*"],
       "$views/*": ["src/Views/*"],
-      "$config/*": ["src/config/*"]
+      "$config/*": ["src/config/*"],
+      "$i18n/*": ["src/i18n/*"],
+      "$paraglide/*": ["src/paraglide/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "vite.config.ts"]
 }

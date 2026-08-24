@@ -8,6 +8,7 @@
   import { workspaceUseCases as uc } from "$usecases/workspace";
   import { requestConnect } from "./connectFlow.svelte";
   import { checkNode } from "./nodeHealth.svelte";
+  import { m } from "$paraglide/messages.js";
 
   interface Props {
     x: number;
@@ -34,7 +35,7 @@
   // Etiqueta legible de la credencial para el ítem del menú.
   function credLabel(c: Credential): string {
     const who = c.username ? ` · ${c.username}` : "";
-    return `${c.kind.toUpperCase()}${who}${c.isDefault ? " (por defecto)" : ""}`;
+    return `${c.kind.toUpperCase()}${who}${c.isDefault ? ` ${m.menu_default_suffix()}` : ""}`;
   }
 
   function connect(credentialId: string | null) {
@@ -43,7 +44,7 @@
     // cerrar el menú a continuación sin perder la acción.
     requestConnect(nodeId, credentialId, credentials).catch((e: unknown) => {
       console.error("connect falló", e);
-      const msg = typeof e === "string" ? e : e instanceof Error ? e.message : "No se pudo conectar";
+      const msg = typeof e === "string" ? e : e instanceof Error ? e.message : m.menu_connect_error();
       alert(msg);
     });
     onClose();
@@ -65,7 +66,7 @@
   {#if connectable}
     {#if credentials.length > 0}
       <button class="item accent" role="menuitem" onclick={() => connect(null)}>
-        <Icon icon={icons.connect} size={15} /> Conectar
+        <Icon icon={icons.connect} size={15} /> {m.menu_connect()}
       </button>
       <div class="sep"></div>
       {#each credentials as c (c.id)}
@@ -74,20 +75,20 @@
         </button>
       {/each}
     {:else}
-      <span class="empty">Sin credenciales</span>
+      <span class="empty">{m.menu_no_credentials()}</span>
     {/if}
     <div class="sep"></div>
   {/if}
 
   {#if kind !== "zone" && canProbe}
     <button class="item" role="menuitem" onclick={() => { void checkNode(nodeId); onClose(); }}>
-      <Icon icon={icons.connect} size={15} /> Comprobar estado
+      <Icon icon={icons.connect} size={15} /> {m.menu_check_status()}
     </button>
     <div class="sep"></div>
   {/if}
 
   <button class="item danger" role="menuitem" onclick={() => { onDelete(); onClose(); }}>
-    <Icon icon={icons.delete} size={15} /> Eliminar nodo
+    <Icon icon={icons.delete} size={15} /> {m.menu_delete_node()}
   </button>
 </div>
 

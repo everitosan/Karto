@@ -17,6 +17,9 @@
   import { networkContext } from "../networkContext.svelte";
   import CodeEditor, { type CodeLanguage } from "$components/CodeEditor.svelte";
   import type { InfraMap } from "$domain/infra";
+  import { NODE_CATALOG, type NodeKind } from "@karto/catalog";
+  import { nodeKindLabel } from "$i18n/catalog";
+  import { m } from "$paraglide/messages.js";
 
   // --- Estado ---------------------------------------------------------------
   // Último diagrama elegido: se persiste en localStorage para no tener que
@@ -142,9 +145,49 @@
       .filter((t) => compatibleWith(interpreter, t))
       .map((t) => ({ ...t, ...selectability(interpreter, t) })),
   );
+  // Objetivos agrupados por tipo de nodo (servidores, VMs, contenedores…) para
+  // localizarlos de un vistazo. El orden es el lógico de cómputo→datos; los tipos
+  // no listados caen al final. Cada grupo trae su etiqueta traducida y el icono
+  // base del catálogo para la cabecera.
+  const KIND_ORDER = [
+    "server",
+    "vm",
+    "hypervisor",
+    "container",
+    "bastion",
+    "nas",
+    "generic",
+    "database",
+  ];
+  const groupedTargets = $derived.by(() => {
+    const byKind = new Map<string, typeof displayTargets>();
+    for (const t of displayTargets) {
+      const arr = byKind.get(t.kind) ?? [];
+      arr.push(t);
+      byKind.set(t.kind, arr);
+    }
+    return [...byKind.entries()]
+      .map(([kind, items]) => ({
+        kind,
+        label: nodeKindLabel(kind as NodeKind),
+        icon: (NODE_CATALOG[kind as NodeKind] ?? NODE_CATALOG.generic).icon,
+        items,
+      }))
+      .sort((a, b) => {
+        const ia = KIND_ORDER.indexOf(a.kind);
+        const ib = KIND_ORDER.indexOf(b.kind);
+        return (ia === -1 ? Infinity : ia) - (ib === -1 ? Infinity : ib);
+      });
+  });
   const selectedNodeIds = $derived(
     displayTargets.filter((t) => t.connectable && selected[t.nodeId]).map((t) => t.nodeId),
   );
+  // Marca/desmarca de golpe todos los equipos conectables de una sección.
+  function toggleGroup(items: { nodeId: string }[], checked: boolean) {
+    const next = { ...selected };
+    for (const t of items) next[t.nodeId] = checked;
+    selected = next;
+  }
   const canRun = $derived(
     !running && selectedNodeIds.length > 0 && scriptBody.trim().length > 0,
   );
@@ -261,7 +304,7 @@
 
   // --- Carpetas -------------------------------------------------------------
   async function newFolder() {
-    const id = await scriptsUseCases.createFolder("Nueva carpeta");
+    const id = await scriptsUseCases.createFolder(m.sidebar_new_folder());
     await reloadLibrary();
     editingFolderId = id; // entra directo a renombrar
   }
@@ -375,8 +418,8 @@
     <button
       class="lib-del"
       onclick={() => askDelete(s)}
-      title="Borrar"
-      aria-label={`Borrar ${s.name}`}
+      title={m.scripts_delete_short()}
+      aria-label={m.scripts_delete_named({ name: s.name })}
     >
       <Icon icon={icons.delete} size={14} />
     </button>
@@ -387,23 +430,23 @@
   <!-- Barra de ejecución: diagrama objetivo + modo + lanzar. -->
   <div class="toolbar">
     <label class="ctl">
-      <span>Diagrama</span>
+      <span>{m.scripts_diagram()}</span>
       <select bind:value={selectedMapId} onchange={loadTargets} disabled={running}>
-        <option value="">— selecciona un diagrama —</option>
-        {#each maps as m (m.id)}
-          <option value={m.id}>{m.name}</option>
+        <option value="">{m.scripts_select_diagram()}</option>
+        {#each maps as mp (mp.id)}
+          <option value={mp.id}>{mp.name}</option>
         {/each}
       </select>
     </label>
 
-    <div class="mode" role="group" aria-label="Modo de ejecución">
+    <div class="mode" role="group" aria-label={m.scripts_run_mode()}>
       <button
         class="seg"
         class:active={mode === "sequential"}
         onclick={() => (mode = "sequential")}
         disabled={running}
       >
-        Secuencial
+        {m.scripts_sequential()}
       </button>
       <button
         class="seg"
@@ -411,13 +454,13 @@
         onclick={() => (mode = "parallel")}
         disabled={running}
       >
-        Paralelo
+        {m.scripts_parallel()}
       </button>
     </div>
 
     <button class="run" class:enabled={canRun} disabled={!canRun} onclick={run}>
       <Icon icon={icons.logout} size={16} />
-      {running ? "Ejecutando…" : "Ejecutar"}
+      {running ? m.scripts_running() : m.scripts_run()}
     </button>
   </div>
 
@@ -425,17 +468,17 @@
     <!-- (b) Biblioteca + editor de scripts. -->
     <section class="panel editor">
       <header>
-        <Icon icon={icons.script} size={15} /> Script
+        <Icon icon={icons.script} size={15} /> {m.scripts_script()}
       </header>
       <div class="editor-body">
         <div class="library">
           <div class="library-head">
-            <span>Biblioteca</span>
+            <span>{m.scripts_library()}</span>
             <div class="library-actions">
-              <button onclick={newFolder} title="Nueva carpeta" aria-label="Nueva carpeta">
+              <button onclick={newFolder} title={m.sidebar_new_folder()} aria-label={m.sidebar_new_folder()}>
                 <Icon icon={icons.folder} size={15} />
               </button>
-              <button onclick={newScript} title="Nuevo script" aria-label="Nuevo script">
+              <button onclick={newScript} title={m.scripts_new_script()} aria-label={m.scripts_new_script()}>
                 <Icon icon={icons.add} size={15} />
               </button>
             </div>
@@ -446,7 +489,7 @@
                 <button
                   class="folder-toggle"
                   onclick={() => toggleCollapse(f.id)}
-                  aria-label={collapsed[f.id] ? "Expandir" : "Colapsar"}
+                  aria-label={collapsed[f.id] ? m.common_expand() : m.common_collapse()}
                 >
                   <span class="chev" class:open={!collapsed[f.id]}>
                     <Icon icon={icons.chevron} size={13} />
@@ -484,7 +527,7 @@
           {/each}
 
           {#if library.length === 0 && folders.length === 0}
-            <div class="empty small">Sin scripts guardados.</div>
+            <div class="empty small">{m.scripts_empty_library()}</div>
           {/if}
         </div>
         <div class="editor-pane">
@@ -492,15 +535,15 @@
             <input
               class="name"
               bind:value={scriptName}
-              placeholder="Nombre del script"
+              placeholder={m.scripts_name_placeholder()}
               spellcheck="false"
             />
-            <select class="interp" bind:value={interpreter} title="Intérprete">
-              <optgroup label="Shell">
+            <select class="interp" bind:value={interpreter} title={m.scripts_interpreter()}>
+              <optgroup label={m.scripts_group_shell()}>
                 <option value="bash">Bash</option>
                 <option value="python">Python</option>
               </optgroup>
-              <optgroup label="Base de datos">
+              <optgroup label={m.scripts_group_db()}>
                 <option value="postgresql">PostgreSQL</option>
                 <option value="mysql">MySQL</option>
                 <option value="mariadb">MariaDB</option>
@@ -515,8 +558,8 @@
             class:dirty
             onclick={saveScript}
             disabled={!scriptName.trim()}
-            title={dirty ? "Cambios sin guardar — guardar" : "Guardar"}
-            aria-label="Guardar"
+            title={dirty ? m.scripts_save_dirty() : m.common_save()}
+            aria-label={m.common_save()}
           >
             <Icon icon={icons.save} size={16} />
           </button>
@@ -526,29 +569,53 @@
 
     <!-- (a) Equipos objetivo (nodos conectables del diagrama). -->
     <section class="panel targets">
-      <header><Icon icon={icons.connect} size={15} /> Equipos objetivo</header>
+      <header><Icon icon={icons.connect} size={15} /> {m.scripts_targets()}</header>
       {#if !selectedMapId}
-        <div class="empty">Selecciona un diagrama para listar sus equipos conectables.</div>
+        <div class="empty">{m.scripts_targets_empty_nomap()}</div>
       {:else if targets.length === 0}
-        <div class="empty">El diagrama no tiene equipos.</div>
+        <div class="empty">{m.scripts_targets_empty()}</div>
       {:else if displayTargets.length === 0}
-        <div class="empty">Ningún equipo del diagrama es compatible con scripts {interpreter}.</div>
+        <div class="empty">{m.scripts_targets_incompatible({ interpreter })}</div>
       {:else}
         <ul class="target-list">
-          {#each displayTargets as t (t.nodeId)}
-            <li class:disabled={!t.connectable}>
-              <label>
-                <input
-                  type="checkbox"
-                  bind:checked={selected[t.nodeId]}
-                  disabled={!t.connectable || running}
-                />
-                <span class="tlabel">{t.label}</span>
-              </label>
-              {#if !t.connectable}
-                <span class="reason">{t.reason}</span>
-              {/if}
+          {#each groupedTargets as g (g.kind)}
+            {@const conn = g.items.filter((t) => t.connectable)}
+            {@const allSel = conn.length > 0 && conn.every((t) => selected[t.nodeId])}
+            {@const someSel = conn.some((t) => selected[t.nodeId])}
+            <li class="group-head" class:disabled={conn.length === 0}>
+              <input
+                type="checkbox"
+                checked={allSel}
+                indeterminate={someSel && !allSel}
+                disabled={conn.length === 0 || running}
+                onchange={(e) => toggleGroup(conn, e.currentTarget.checked)}
+                aria-label={g.label}
+              />
+              <Icon icon={g.icon} size={14} />
+              <span class="gname">{g.label}</span>
+              <span class="gcount">{g.items.length}</span>
             </li>
+            {#each g.items as t (t.nodeId)}
+              <li class:disabled={!t.connectable}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={t.connectable && selected[t.nodeId]}
+                    disabled={!t.connectable || running}
+                    onchange={(e) => (selected[t.nodeId] = e.currentTarget.checked)}
+                  />
+                  <span class="tlabel">{t.label}</span>
+                  {#if (t.kind === "server" || t.kind === "vm") && t.os}
+                    <span class="tmeta">{t.os}</span>
+                  {:else if t.kind === "database" && t.instance}
+                    <span class="tmeta">— {t.instance}</span>
+                  {/if}
+                </label>
+                {#if !t.connectable}
+                  <span class="reason">{t.reason}</span>
+                {/if}
+              </li>
+            {/each}
           {/each}
         </ul>
       {/if}
@@ -556,9 +623,9 @@
 
     <!-- (d) Salida por equipo. -->
     <section class="panel output">
-      <header><Icon icon={icons.terminal} size={15} /> Salida</header>
+      <header><Icon icon={icons.terminal} size={15} /> {m.scripts_output()}</header>
       {#if Object.keys(runs).length === 0}
-        <div class="empty">La salida de cada equipo aparecerá aquí al ejecutar.</div>
+        <div class="empty">{m.scripts_output_empty()}</div>
       {:else}
         <div class="out-list">
           {#each Object.values(runs) as r (r.nodeId)}
@@ -572,8 +639,8 @@
                 <button
                   class="out-full"
                   onclick={() => (fullNodeId = r.nodeId)}
-                  title="Ver a pantalla completa"
-                  aria-label="Ver a pantalla completa"
+                  title={m.scripts_fullscreen_enter()}
+                  aria-label={m.scripts_fullscreen_enter()}
                 >
                   <Icon icon={icons.expand} size={14} />
                 </button>
@@ -604,8 +671,8 @@
       <button
         class="out-full"
         onclick={() => (fullNodeId = null)}
-        title="Salir de pantalla completa"
-        aria-label="Salir de pantalla completa"
+        title={m.scripts_fullscreen_exit()}
+        aria-label={m.scripts_fullscreen_exit()}
       >
         <Icon icon={icons.minimize} size={16} />
       </button>
@@ -617,7 +684,7 @@
       {#if fullRun.output}
         <pre>{fullRun.output}</pre>
       {:else if !fullRun.error}
-        <div class="empty">Sin salida todavía.</div>
+        <div class="empty">{m.scripts_no_output()}</div>
       {/if}
     </div>
   </div>
@@ -625,33 +692,31 @@
 
 <Modal
   open={pendingDelete !== null}
-  title="Borrar script"
+  title={m.scripts_delete_script()}
   width="24rem"
   onClose={() => (pendingDelete = null)}
 >
   <p class="confirm-text">
-    ¿Seguro que quieres borrar el script <strong>«{pendingDelete?.name}»</strong>? Esta acción no se
-    puede deshacer.
+    {m.scripts_confirm_del_script_before()}<strong>«{pendingDelete?.name}»</strong>{m.scripts_confirm_del_script_after()}
   </p>
   {#snippet footer()}
-    <Button variant="secondary" onclick={() => (pendingDelete = null)}>Cancelar</Button>
-    <Button variant="danger" onclick={confirmDelete}>Borrar</Button>
+    <Button variant="secondary" onclick={() => (pendingDelete = null)}>{m.common_cancel()}</Button>
+    <Button variant="danger" onclick={confirmDelete}>{m.scripts_delete_short()}</Button>
   {/snippet}
 </Modal>
 
 <Modal
   open={pendingFolderDelete !== null}
-  title="Borrar carpeta"
+  title={m.scripts_delete_folder()}
   width="24rem"
   onClose={() => (pendingFolderDelete = null)}
 >
   <p class="confirm-text">
-    ¿Seguro que quieres borrar la carpeta <strong>«{pendingFolderDelete?.name}»</strong>? Sus scripts
-    no se borran: quedarán sin carpeta.
+    {m.scripts_confirm_del_folder_before()}<strong>«{pendingFolderDelete?.name}»</strong>{m.scripts_confirm_del_folder_after()}
   </p>
   {#snippet footer()}
-    <Button variant="secondary" onclick={() => (pendingFolderDelete = null)}>Cancelar</Button>
-    <Button variant="danger" onclick={confirmFolderDelete}>Borrar</Button>
+    <Button variant="secondary" onclick={() => (pendingFolderDelete = null)}>{m.common_cancel()}</Button>
+    <Button variant="danger" onclick={confirmFolderDelete}>{m.scripts_delete_short()}</Button>
   {/snippet}
 </Modal>
 
@@ -663,8 +728,8 @@
     <div class="ctx-menu" style="left: {menu.x}px; top: {menu.y}px" onclick={(e) => e.stopPropagation()}>
       {#if menu.kind === "script"}
         {@const script = menu.script}
-        <div class="ctx-label">Mover a</div>
-        <button class="ctx-item" onclick={() => moveScript(script.id, null)}>Sin carpeta</button>
+        <div class="ctx-label">{m.scripts_move_to()}</div>
+        <button class="ctx-item" onclick={() => moveScript(script.id, null)}>{m.scripts_no_folder()}</button>
         {#each folders as f (f.id)}
           <button class="ctx-item" onclick={() => moveScript(script.id, f.id)}>
             <Icon icon={icons.folder} size={13} />
@@ -679,7 +744,7 @@
             askDelete(script);
           }}
         >
-          <Icon icon={icons.delete} size={13} /> Borrar script
+          <Icon icon={icons.delete} size={13} /> {m.scripts_delete_script()}
         </button>
       {:else}
         {@const folder = menu.folder}
@@ -690,7 +755,7 @@
             closeMenu();
           }}
         >
-          <Icon icon={icons.edit} size={13} /> Renombrar
+          <Icon icon={icons.edit} size={13} /> {m.common_rename()}
         </button>
         <button
           class="ctx-item danger"
@@ -699,7 +764,7 @@
             closeMenu();
           }}
         >
-          <Icon icon={icons.delete} size={13} /> Borrar carpeta
+          <Icon icon={icons.delete} size={13} /> {m.scripts_delete_folder()}
         </button>
       {/if}
     </div>
@@ -1137,6 +1202,51 @@
   .target-list li.disabled .tlabel {
     color: var(--karto-color-text-muted);
   }
+  .target-list li.disabled label {
+    cursor: not-allowed;
+  }
+  .target-list li.disabled input {
+    cursor: not-allowed;
+  }
+  /* Cabecera de grupo por tipo de nodo (servidores, VMs…). */
+  .target-list li.group-head {
+    gap: 0.4rem;
+    justify-content: flex-start;
+    margin-top: 0.35rem;
+    padding: 0.2rem 0.3rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--karto-color-text-muted);
+    border-bottom: 1px solid var(--karto-color-border);
+  }
+  .target-list li.group-head:first-child {
+    margin-top: 0;
+  }
+  .target-list li.group-head input {
+    cursor: pointer;
+  }
+  .target-list li.group-head.disabled input {
+    cursor: not-allowed;
+  }
+  .target-list li.group-head :global(svg) {
+    color: var(--karto-color-text-muted);
+  }
+  .group-head .gname {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .group-head .gcount {
+    flex-shrink: 0;
+    font-weight: 500;
+    color: var(--karto-color-text-muted);
+    background: var(--karto-color-border);
+    border-radius: 999px;
+    padding: 0.02rem 0.35rem;
+  }
   .target-list label {
     display: inline-flex;
     align-items: center;
@@ -1147,6 +1257,14 @@
     font-size: 0.72rem;
     color: var(--karto-color-text-muted);
     font-style: italic;
+  }
+  /* Detalle junto al nombre: SO (server/vm) o nombre de la BD (database). */
+  .tmeta {
+    font-size: 0.72rem;
+    color: var(--karto-color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .out-item {
     border: 1px solid var(--karto-color-border);

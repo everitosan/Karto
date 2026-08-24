@@ -4,6 +4,7 @@
   import { SvelteFlowProvider } from "@xyflow/svelte";
   import FlowEditor from "./canvas/FlowEditor.svelte";
   import KeyOnboardingModal from "./canvas/KeyOnboardingModal.svelte";
+  import TemplateTrustModal from "./canvas/TemplateTrustModal.svelte";
 
   interface Props {
     mapId: string | null;
@@ -29,6 +30,10 @@
   <!-- Modal de onboarding de llave SSH: se abre desde el panel o el menú
        contextual vía el store compartido de connectFlow. -->
   <KeyOnboardingModal />
+
+  <!-- Confirmación de plantilla de conexión de un vault importado (evita RCE al
+       ejecutar plantillas de terceros sin autorización explícita). -->
+  <TemplateTrustModal />
 </section>
 
 <style>

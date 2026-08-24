@@ -8,7 +8,7 @@
 //! pequeña y testeable de forma aislada.
 
 use crate::domain::{Credential, Edge, Folder, Graph, Map, Node, SearchHit};
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
 
@@ -434,6 +434,18 @@ pub struct CredentialInput<'a> {
 
 /// Crea o actualiza una credencial. Si `is_default`, desmarca las demás del nodo.
 pub fn credential_upsert(conn: &Connection, input: CredentialInput) -> AppResult<Credential> {
+    // Rechaza opciones SSH que ejecutan comandos locales (evita guardar credenciales
+    // "tóxicas"; el filtro al conectar queda como red de seguridad para vaults ya
+    // existentes o importados).
+    if let Some(opts) = input.options {
+        for line in opts.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+            if crate::usecases::connections::is_dangerous_ssh_option(line) {
+                return Err(AppError::Other(format!(
+                    "opción SSH no permitida (puede ejecutar comandos): {line}"
+                )));
+            }
+        }
+    }
     if input.is_default {
         conn.execute(
             "UPDATE credentials SET is_default = 0 WHERE node_id = ?1",
@@ -772,6 +784,32 @@ mod tests {
             credential_reveal(&conn, &cred.id).unwrap().as_deref(),
             Some("s3cr3t")
         );
+    }
+
+    #[test]
+    fn credential_upsert_rejects_dangerous_ssh_options() {
+        let conn = db();
+        let map = map_create(&conn, "Red", None).unwrap();
+        let node = node_create(&conn, &map.id, "server", "A", 0.0, 0.0).unwrap();
+
+        let err = credential_upsert(
+            &conn,
+            CredentialInput {
+                id: None,
+                node_id: &node.id,
+                kind: "ssh",
+                username: Some("root"),
+                secret: None,
+                port: None,
+                key_path: None,
+                is_default: true,
+                options: Some("ServerAliveInterval=60\nProxyCommand=sh -c evil"),
+            },
+        )
+        .unwrap_err();
+        assert!(matches!(err, AppError::Other(_)));
+        // No se guardó nada.
+        assert!(credential_list(&conn, &node.id).unwrap().is_empty());
     }
 
     #[test]

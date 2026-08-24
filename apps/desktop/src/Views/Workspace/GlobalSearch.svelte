@@ -5,7 +5,8 @@
   // local a la vista Workspace.
   import { Icon, icons } from "@karto/ui";
   import type { SearchHit } from "$domain/infra";
-  import { NODE_KIND_LABELS } from "$domain/infra";
+  import { nodeKindLabel } from "$i18n/catalog";
+  import { m } from "$paraglide/messages.js";
   import { workspaceUseCases as uc } from "$usecases/workspace";
 
   interface Props {
@@ -74,12 +75,12 @@
       oninput={onInput}
       onkeydown={onKeydown}
       onfocus={() => (open = results.length > 0)}
-      placeholder="Buscar por IP, host o etiqueta…"
+      placeholder={m.search_placeholder()}
       spellcheck="false"
       autocomplete="off"
     />
     {#if query}
-      <button class="clear" onclick={clear} title="Limpiar" aria-label="Limpiar búsqueda">
+      <button class="clear" onclick={clear} title={m.common_clear()} aria-label={m.search_clear()}>
         <Icon icon={icons.close} size={14} />
       </button>
     {/if}
@@ -91,12 +92,12 @@
     <div class="backdrop" onclick={() => (open = false)}></div>
     <ul class="results" role="listbox">
       {#if results.length === 0}
-        <li class="empty">Sin resultados</li>
+        <li class="empty">{m.search_no_results()}</li>
       {:else}
         {#each results as hit (hit.nodeId)}
           <li>
             <button class="hit" onclick={() => pick(hit)} role="option" aria-selected="false">
-              <span class="label">{hit.label || NODE_KIND_LABELS[hit.kind] || hit.kind}</span>
+              <span class="label">{hit.label || nodeKindLabel(hit.kind)}</span>
               <span class="meta">
                 <span class="matched">{hit.matched}</span>
                 <span class="map">{hit.mapName}</span>

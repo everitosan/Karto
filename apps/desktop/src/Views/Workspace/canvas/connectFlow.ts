@@ -27,3 +27,20 @@ export interface KeyOnboardingChoice {
   setDefaultKey: boolean;
   storeInVault: boolean;
 }
+
+// Prefijo estable del error que devuelve `connect_node` cuando el vault trae una
+// plantilla de conexión y no está marcado como de confianza en esta máquina.
+const TEMPLATE_CONFIRM_PREFIX = "confirmación de plantilla requerida:";
+
+/**
+ * Si `err` es el aviso de confirmación de plantilla, devuelve el comando que la
+ * plantilla ejecutaría; si es cualquier otro error, devuelve `null` (el caller lo
+ * propaga). Puro y testeable.
+ */
+export function templateConfirmCommand(err: unknown): string | null {
+  const msg =
+    typeof err === "string" ? err : ((err as Error)?.message ?? String(err));
+  return msg.startsWith(TEMPLATE_CONFIRM_PREFIX)
+    ? msg.slice(TEMPLATE_CONFIRM_PREFIX.length).trim()
+    : null;
+}

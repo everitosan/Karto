@@ -1,29 +1,32 @@
 <script lang="ts">
   // Sección Configuración (página completa, zona 6). Shell de tabs a ancho
   // completo; cada tab es un componente local en `settings/`.
+  import GeneralSettings from "./settings/GeneralSettings.svelte";
   import AboutSettings from "./settings/AboutSettings.svelte";
   import SecuritySettings from "./settings/SecuritySettings.svelte";
   import BackupSettings from "./settings/BackupSettings.svelte";
   import TemplateSettings from "./settings/TemplateSettings.svelte";
   import ShortcutSettings from "./settings/ShortcutSettings.svelte";
   import DiagnosticsSettings from "./settings/DiagnosticsSettings.svelte";
+  import { m } from "$paraglide/messages.js";
 
-  type Tab = "about" | "security" | "backups" | "templates" | "shortcuts" | "diagnostics";
+  type Tab = "general" | "about" | "security" | "backups" | "templates" | "shortcuts" | "diagnostics";
   const TABS: { id: Tab; label: string }[] = [
-    { id: "about", label: "Acerca de" },
-    { id: "security", label: "Seguridad" },
-    { id: "backups", label: "Respaldos" },
-    { id: "templates", label: "Plantillas" },
-    { id: "shortcuts", label: "Atajos" },
-    { id: "diagnostics", label: "Diagnóstico" },
+    { id: "general", label: m.settings_tab_general() },
+    { id: "about", label: m.settings_tab_about() },
+    { id: "security", label: m.settings_tab_security() },
+    { id: "backups", label: m.settings_tab_backups() },
+    { id: "templates", label: m.settings_tab_templates() },
+    { id: "shortcuts", label: m.settings_tab_shortcuts() },
+    { id: "diagnostics", label: m.settings_tab_diagnostics() },
   ];
 
-  let active = $state<Tab>("about");
+  let active = $state<Tab>("general");
 </script>
 
 <div class="settings">
   <header class="head">
-    <h2>Configuración</h2>
+    <h2>{m.nav_config()}</h2>
     <div class="tabs" role="tablist">
       {#each TABS as tab (tab.id)}
         <button
@@ -40,7 +43,9 @@
   </header>
 
   <div class="panel">
-    {#if active === "about"}
+    {#if active === "general"}
+      <GeneralSettings />
+    {:else if active === "about"}
       <AboutSettings />
     {:else if active === "security"}
       <SecuritySettings />

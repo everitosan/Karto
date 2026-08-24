@@ -6,6 +6,7 @@
   import { vaultUseCases } from "$usecases/vault";
   import { VaultError } from "$domain/vault";
   import { appSettings, updateAppSetting } from "../../appSettings.svelte";
+  import { m } from "$paraglide/messages.js";
 
   let autoLock = $state(appSettings.autoLockMinutes);
   let clipboardClear = $state(appSettings.clipboardClearSeconds);
@@ -31,23 +32,23 @@
   async function changePassword() {
     pwMessage = null;
     if (pwNew.length < 1) {
-      pwMessage = { kind: "err", text: "La nueva contraseña no puede estar vacía." };
+      pwMessage = { kind: "err", text: m.sec_pw_empty() };
       return;
     }
     if (pwNew !== pwConfirm) {
-      pwMessage = { kind: "err", text: "La confirmación no coincide." };
+      pwMessage = { kind: "err", text: m.export_error_mismatch() };
       return;
     }
     pwBusy = true;
     try {
       await vaultUseCases.rekey(pwCurrent, pwNew);
       pwCurrent = pwNew = pwConfirm = "";
-      pwMessage = { kind: "ok", text: "Contraseña maestra actualizada." };
+      pwMessage = { kind: "ok", text: m.sec_pw_updated() };
     } catch (e) {
       const text =
         e instanceof VaultError && e.kind === "wrong-password"
-          ? "La contraseña actual es incorrecta."
-          : "No se pudo cambiar la contraseña.";
+          ? m.sec_pw_wrong()
+          : m.sec_pw_error();
       pwMessage = { kind: "err", text };
     } finally {
       pwBusy = false;
@@ -56,34 +57,34 @@
 </script>
 
 <section class="group">
-  <h4>Bloqueo</h4>
+  <h4>{m.sec_lock_title()}</h4>
   <div class="lock-row">
     <label class="field">
-      <span>Auto-bloqueo por inactividad (minutos, 0 = desactivado)</span>
+      <span>{m.sec_autolock()}</span>
       <input type="number" min="0" bind:value={autoLock} onchange={saveAutoLock} onblur={saveAutoLock} />
     </label>
     <label class="field">
-      <span>Limpiar portapapeles tras copiar (segundos, 0 = nunca)</span>
+      <span>{m.sec_clipboard()}</span>
       <input type="number" min="0" bind:value={clipboardClear} onchange={saveClipboard} onblur={saveClipboard} />
     </label>
   </div>
 </section>
 
 <section class="group">
-  <h4>Contraseña maestra</h4>
+  <h4>{m.auth_password_master()}</h4>
   <div class="pw-grid">
     <div class="pw-field">
-      <PasswordField label="Contraseña actual" bind:value={pwCurrent} />
+      <PasswordField label={m.sec_pw_current()} bind:value={pwCurrent} />
     </div>
     <div class="pw-field">
-      <PasswordField label="Nueva contraseña" bind:value={pwNew} />
+      <PasswordField label={m.sec_pw_new()} bind:value={pwNew} />
     </div>
     <div class="pw-field">
-      <PasswordField label="Confirmar nueva contraseña" bind:value={pwConfirm} />
+      <PasswordField label={m.sec_pw_confirm_new()} bind:value={pwConfirm} />
     </div>
     <div class="pw-actions">
       <Button variant="secondary" onclick={changePassword} disabled={pwBusy}>
-        {pwBusy ? "Cambiando…" : "Cambiar contraseña"}
+        {pwBusy ? m.sec_changing() : m.sec_change_pw()}
       </Button>
     </div>
   </div>

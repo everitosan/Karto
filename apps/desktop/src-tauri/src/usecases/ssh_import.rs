@@ -66,11 +66,14 @@ pub fn grid_layout(count: usize, cols: usize, dx: f64, dy: f64) -> Vec<(f64, f64
 /// Crea un nodo `server` por cada host importado en el diagrama destino,
 /// dispuestos en rejilla, con su credencial SSH predeterminada (usuario, puerto
 /// y ruta de llave si venían en el `~/.ssh/config`). El secreto queda vacío: la
-/// contraseña se teclea al conectar o se añade luego desde el panel. Devuelve
+/// contraseña se teclea al conectar o se añade luego desde el panel. La dirección
+/// (IP/host) se registra como *endpoint* del contexto `context_id` elegido, no
+/// como propiedad `hostname` fija: la dirección de un nodo es contextual. Devuelve
 /// los nodos creados para que el frontend refresque el grafo.
 pub fn import_hosts(
     conn: &Connection,
     map_id: &str,
+    context_id: &str,
     hosts: &[ImportedHost],
 ) -> AppResult<Vec<Node>> {
     let positions = grid_layout(hosts.len(), 4, 220.0, 140.0);
@@ -78,9 +81,9 @@ pub fn import_hosts(
     for (host, (x, y)) in hosts.iter().zip(positions) {
         let node = workspace::node_create(conn, map_id, "server", &host.alias, x, y)?;
 
-        let mut props = HashMap::new();
-        props.insert("hostname".to_string(), host_target(host).to_string());
-        workspace::node_set_properties(conn, &node.id, &props)?;
+        let mut endpoints = HashMap::new();
+        endpoints.insert(context_id.to_string(), host_target(host).to_string());
+        workspace::node_set_endpoints(conn, &node.id, &endpoints)?;
 
         workspace::credential_upsert(
             conn,
@@ -288,7 +291,8 @@ mod tests {
             },
         ];
 
-        let created = import_hosts(&conn, &map.id, &hosts).unwrap();
+        // Contexto destino: el "Principal" por defecto que crea la migración.
+        let created = import_hosts(&conn, &map.id, "default", &hosts).unwrap();
         assert_eq!(created.len(), 2);
 
         let graph = workspace::graph_load(&conn, &map.id).unwrap();
@@ -296,7 +300,9 @@ mod tests {
 
         let web = graph.nodes.iter().find(|n| n.label == "web1").unwrap();
         assert_eq!(web.kind, "server");
-        assert_eq!(web.properties.get("hostname").map(String::as_str), Some("10.0.0.10"));
+        // La IP se registra como endpoint del contexto elegido, no como hostname.
+        assert_eq!(web.endpoints.get("default").map(String::as_str), Some("10.0.0.10"));
+        assert!(web.properties.get("hostname").is_none());
 
         let creds = workspace::credential_list(&conn, &web.id).unwrap();
         assert_eq!(creds.len(), 1);
@@ -308,7 +314,7 @@ mod tests {
 
         // El host sin HostName usa el alias como destino.
         let db = graph.nodes.iter().find(|n| n.label == "db1").unwrap();
-        assert_eq!(db.properties.get("hostname").map(String::as_str), Some("db1"));
+        assert_eq!(db.endpoints.get("default").map(String::as_str), Some("db1"));
     }
 
     #[test]

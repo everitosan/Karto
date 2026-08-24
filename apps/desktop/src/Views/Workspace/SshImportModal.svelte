@@ -8,9 +8,10 @@
   import { Modal, Button, Icon, Checkbox, icons } from "@karto/ui";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
-  import type { CandidateFile, ImportedHost, InfraMap } from "$domain/infra";
+  import type { AccessContext, CandidateFile, ImportedHost, InfraMap } from "$domain/infra";
   import { workspaceUseCases as uc } from "$usecases/workspace";
   import { hostTarget, isDuplicate } from "./sshImport";
+  import { m } from "$paraglide/messages.js";
 
   interface Props {
     open: boolean;
@@ -39,8 +40,14 @@
   let duplicates = $state<Set<string>>(new Set());
   let targetMode = $state<"existing" | "new">("existing");
   let targetMapId = $state<string | null>(null);
-  let newMapName = $state("Hosts SSH");
+  let newMapName = $state(m.ssh_hosts_map_default());
   let importing = $state(false);
+
+  // Contexto de acceso destino: la IP importada se guarda como dirección de este
+  // contexto. Si solo hay uno ("Principal"), se usa sin preguntar; si hay varios,
+  // se muestra un selector.
+  let contexts = $state<AccessContext[]>([]);
+  let targetContextId = $state<string | null>(null);
 
   const basename = (p: string) => p.split(/[\\/]/).pop() ?? p;
 
@@ -85,6 +92,8 @@
     importing = false;
     loadingCandidates = true;
     try {
+      contexts = await uc.listContexts();
+      targetContextId = contexts[0]?.id ?? null;
       candidates = await uc.sshImportCandidates();
     } catch (e) {
       error = String(e);
@@ -104,7 +113,7 @@
       hosts = await uc.sshImportParseFile(path);
       targetMode = maps.length > 0 ? "existing" : "new";
       targetMapId = selectedMapId ?? maps[0]?.id ?? null;
-      newMapName = `Hosts ${sourceName}`;
+      newMapName = m.ssh_hosts_map_named({ name: sourceName });
       await refreshDuplicates();
     } catch (e) {
       error = String(e);
@@ -117,7 +126,7 @@
     const picked = await openDialog({
       multiple: false,
       directory: false,
-      title: "Elegir archivo de configuración SSH",
+      title: m.ssh_browse_title(),
     });
     if (typeof picked === "string") await loadSource(picked);
   }
@@ -156,6 +165,7 @@
   const canImport = $derived(
     selectedCount > 0 &&
       !importing &&
+      targetContextId !== null &&
       (targetMode === "new" ? newMapName.trim().length > 0 : targetMapId !== null),
   );
 
@@ -168,9 +178,9 @@
         const map = await uc.createMap(newMapName.trim(), null);
         mapId = map.id;
       }
-      if (!mapId) return;
+      if (!mapId || !targetContextId) return;
       const chosen = hosts.filter((h) => selected.has(h.alias));
-      await uc.sshImportHosts(mapId, chosen);
+      await uc.sshImportHosts(mapId, targetContextId, chosen);
       onImported(mapId);
     } catch (e) {
       error = String(e);
@@ -179,7 +189,7 @@
   }
 </script>
 
-<Modal {open} title="Importar desde configuración SSH" width="42rem" {onClose}>
+<Modal {open} title={m.ssh_import_title()} width="42rem" {onClose}>
   <div class="body">
     {#if error}
       <p class="error">{error}</p>
@@ -191,19 +201,19 @@
         class="dropzone"
         class:active={dragActive}
         role="region"
-        aria-label="Soltar un archivo de configuración SSH"
+        aria-label={m.ssh_drop_aria()}
       >
         <Icon icon={icons.terminal} size={22} />
-        <p>Arrastra aquí un archivo de configuración SSH</p>
-        <Button variant="secondary" onclick={browse}>Elegir archivo…</Button>
+        <p>{m.ssh_drop_text()}</p>
+        <Button variant="secondary" onclick={browse}>{m.ssh_choose_file()}</Button>
       </div>
 
       <div class="suggestions">
-        <span class="head">Sugerencias en ~/.ssh</span>
+        <span class="head">{m.ssh_suggestions()}</span>
         {#if loadingCandidates}
-          <p class="muted">Buscando…</p>
+          <p class="muted">{m.ssh_searching()}</p>
         {:else if candidates.length === 0}
-          <p class="muted">No se encontraron archivos de configuración.</p>
+          <p class="muted">{m.ssh_no_files()}</p>
         {:else}
           <ul class="files">
             {#each candidates as c (c.path)}
@@ -214,7 +224,7 @@
                     <span class="fname">{c.name}</span>
                     <span class="fpath">{c.path}</span>
                   </div>
-                  <span class="chip">{c.hostCount} host{c.hostCount === 1 ? "" : "s"}</span>
+                  <span class="chip">{c.hostCount} {c.hostCount === 1 ? m.ssh_host() : m.ssh_hosts()}</span>
                 </button>
               </li>
             {/each}
@@ -223,7 +233,7 @@
       </div>
     {:else}
       <!-- Etapa 2: vista previa del archivo elegido -->
-      <button class="back" onclick={back}>← Elegir otro archivo</button>
+      <button class="back" onclick={back}>← {m.ssh_choose_another()}</button>
       <div class="source-line">
         <Icon icon={icons.terminal} size={14} />
         <span class="fname">{sourceName}</span>
@@ -231,26 +241,35 @@
       </div>
 
       {#if loadingHosts}
-        <p class="muted">Leyendo {sourceName}…</p>
+        <p class="muted">{m.ssh_reading({ name: sourceName })}</p>
       {:else if hosts.length === 0}
-        <p class="muted">No se encontraron hosts en este archivo.</p>
+        <p class="muted">{m.ssh_no_hosts()}</p>
       {:else}
         <label class="field">
-          <span>Diagrama destino</span>
+          <span>{m.ssh_target_diagram()}</span>
           <div class="target-row">
             <select bind:value={targetMode} onchange={onTargetChange}>
-              <option value="existing" disabled={maps.length === 0}>Existente</option>
-              <option value="new">Nuevo diagrama</option>
+              <option value="existing" disabled={maps.length === 0}>{m.ssh_existing()}</option>
+              <option value="new">{m.sidebar_new_map()}</option>
             </select>
             {#if targetMode === "existing"}
               <select bind:value={targetMapId} onchange={onTargetChange}>
-                {#each maps as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
+                {#each maps as mp (mp.id)}<option value={mp.id}>{mp.name}</option>{/each}
               </select>
             {:else}
-              <input placeholder="Nombre del diagrama" bind:value={newMapName} />
+              <input placeholder={m.ssh_diagram_name_placeholder()} bind:value={newMapName} />
             {/if}
           </div>
         </label>
+
+        {#if contexts.length > 1}
+          <label class="field">
+            <span>{m.ssh_target_context()}</span>
+            <select bind:value={targetContextId}>
+              {#each contexts as ctx (ctx.id)}<option value={ctx.id}>{ctx.name}</option>{/each}
+            </select>
+          </label>
+        {/if}
 
         <ul class="hosts">
           {#each hosts as host (host.alias)}
@@ -270,22 +289,22 @@
                       <Icon icon={icons.key} size={11} />
                     </span>
                   {/if}
-                  {#if dup}<span class="chip dup-chip">ya existe</span>{/if}
+                  {#if dup}<span class="chip dup-chip">{m.ssh_already_exists()}</span>{/if}
                 </span>
               </Checkbox>
             </li>
           {/each}
         </ul>
-        <p class="muted count">{selectedCount} de {hosts.length} seleccionados</p>
+        <p class="muted count">{m.ssh_selected_count({ count: selectedCount, total: hosts.length })}</p>
       {/if}
     {/if}
   </div>
 
   {#snippet footer()}
-    <Button variant="secondary" onclick={onClose}>Cancelar</Button>
+    <Button variant="secondary" onclick={onClose}>{m.common_cancel()}</Button>
     {#if sourcePath !== null && hosts.length > 0}
       <Button variant="primary" disabled={!canImport} onclick={doImport}>
-        {importing ? "Importando…" : `Importar ${selectedCount || ""}`.trim()}
+        {importing ? m.ssh_importing() : `${m.ssh_import_action()} ${selectedCount || ""}`.trim()}
       </Button>
     {/if}
   {/snippet}

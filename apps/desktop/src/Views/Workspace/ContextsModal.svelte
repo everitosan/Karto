@@ -9,6 +9,7 @@
     renameContext,
     deleteContext,
   } from "./networkContext.svelte";
+  import { m } from "$paraglide/messages.js";
 
   interface Props {
     open: boolean;
@@ -35,20 +36,18 @@
 
   async function remove(id: string, name: string) {
     if (networkContext.contexts.length <= 1) {
-      alert("Debe existir al menos un contexto.");
+      alert(m.ctx_min_one());
       return;
     }
-    if (!confirm(`¿Eliminar el contexto «${name}»? Se perderán sus direcciones en los nodos.`))
+    if (!confirm(m.ctx_delete_confirm({ name })))
       return;
     await deleteContext(id);
   }
 </script>
 
-<Modal {open} title="Contextos de red" width="28rem" {onClose}>
+<Modal {open} title={m.ctx_title()} width="28rem" {onClose}>
   <p class="hint">
-    Un contexto es un punto de vista de red (oficina, VPN, casa…). Cada nodo
-    guarda su dirección en cada contexto; al cambiar el contexto activo, todo el
-    diagrama usa la dirección correcta sin editar nodo por nodo.
+    {m.ctx_hint()}
   </p>
 
   <ul class="list">
@@ -61,7 +60,7 @@
         />
         <button
           class="icon-btn danger"
-          title="Eliminar contexto"
+          title={m.ctx_delete_title()}
           onclick={() => remove(ctx.id, ctx.name)}
         >
           <Icon icon={icons.delete} size={15} />
@@ -72,17 +71,17 @@
 
   <div class="add">
     <input
-      placeholder="Nuevo contexto (p. ej. VPN)"
+      placeholder={m.ctx_new_placeholder()}
       bind:value={newName}
       onkeydown={(e) => e.key === "Enter" && add()}
     />
     <Button variant="secondary" onclick={add} disabled={!newName.trim()}>
-      <Icon icon={icons.add} size={15} /> Añadir
+      <Icon icon={icons.add} size={15} /> {m.common_add()}
     </Button>
   </div>
 
   {#snippet footer()}
-    <Button onclick={onClose}>Cerrar</Button>
+    <Button onclick={onClose}>{m.common_close()}</Button>
   {/snippet}
 </Modal>
 

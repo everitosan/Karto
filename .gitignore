@@ -10,6 +10,9 @@ build/
 storybook-static/
 .turbo/
 
+# i18n: código generado por Paraglide (se recompila desde messages/*.json)
+apps/desktop/src/paraglide/
+
 # rust / tauri
 apps/desktop/src-tauri/target/
 target/

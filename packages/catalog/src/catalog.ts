@@ -2,6 +2,13 @@
 // sugeridas por tipo y resolución del icono (por propiedad vía Devicon, con
 // respaldo a HugeIcons). El backend guarda `kind` como string libre y
 // `properties` como mapa libre, así que este catálogo vive solo en el front.
+//
+// i18n: los textos visibles (`label`/`placeholder` de propiedad y las `label` de
+// opción que sí se traducen) NO son español, son **slugs** (`cp_`/`cph_`/`co_`)
+// que la app resuelve vía Paraglide en `$i18n/catalog` (`catalogText`). Los
+// nombres propios (PostgreSQL, nginx, AWS…) quedan literales y caen al fallback.
+// Las `label` de nodo y de categoría siguen en español como respaldo, pero la app
+// las traduce por su id (`nodeKind_*`/`category_*`).
 import type { IconSvgElement } from "@hugeicons/svelte";
 import {
   // Red
@@ -131,7 +138,7 @@ const sel = (
   label: string,
   options: PropertyOption[],
 ): PropertySpec => ({ key, label, type: "select", options });
-const notas = t("notas", "Notas");
+const notas = t("notas", "cp_notas");
 
 // Opciones reutilizables (valor → icono Devicon verificado en el paquete).
 const DB_ENGINES: PropertyOption[] = [
@@ -147,9 +154,20 @@ const DB_ENGINES: PropertyOption[] = [
   { value: "cassandra", label: "Cassandra", icon: "cassandra-plain" },
   { value: "influxdb", label: "InfluxDB", icon: "influxdb-plain" },
 ];
+// Backends as a Service: DB + auth + storage + functions en un solo producto.
+// Viven en el nodo `baas`, no como motor de base de datos. PocketBase no tiene
+// icono en Devicon: cae al icono genérico del nodo.
+const BAAS_PROVIDERS: PropertyOption[] = [
+  { value: "firebase", label: "Firebase", icon: "firebase-plain" },
+  { value: "supabase", label: "Supabase", icon: "supabase-plain" },
+  { value: "pocketbase", label: "PocketBase" },
+  { value: "appwrite", label: "Appwrite", icon: "appwrite-original" },
+];
 const APP_FRAMEWORKS: PropertyOption[] = [
   { value: "react", label: "React", icon: "react-original" },
+  { value: "nextjs", label: "Next.js", icon: "nextjs-plain" },
   { value: "svelte", label: "Svelte", icon: "svelte-plain" },
+  { value: "astro", label: "Astro", icon: "astro-plain" },
   { value: "vue", label: "Vue", icon: "vuejs-plain" },
   { value: "angular", label: "Angular", icon: "angular-plain" },
   { value: "node", label: "Node.js", icon: "nodejs-plain" },
@@ -176,7 +194,7 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     label: "Internet",
     icon: InternetIcon,
     connectable: false,
-    properties: [t("asn", "ASN / rango"), notas],
+    properties: [t("asn", "cp_asn_rango"), notas],
   },
   router: {
     kind: "router",
@@ -185,11 +203,11 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: Router01Icon,
     connectable: true,
     properties: [
-      t("modelo", "Marca / modelo"),
-      t("firmware", "Firmware"),
-      t("nat", "NAT (activo/reglas)"),
-      t("vlans", "VLANs"),
-      t("url_admin", "URL admin"),
+      t("modelo", "cp_marca_modelo"),
+      t("firmware", "cp_firmware"),
+      t("nat", "cp_nat_activo_reglas"),
+      t("vlans", "cp_vlans"),
+      t("url_admin", "cp_url_admin"),
       notas,
     ],
   },
@@ -200,9 +218,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: DistributionIcon,
     connectable: true,
     properties: [
-      t("puertos", "Puertos (usados/total)"),
-      t("vlans", "VLANs"),
-      t("modelo", "Marca / modelo"),
+      t("puertos", "cp_puertos_usados_total"),
+      t("vlans", "cp_vlans"),
+      t("modelo", "cp_marca_modelo"),
       notas,
     ],
   },
@@ -213,9 +231,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: Wifi01Icon,
     connectable: true,
     properties: [
-      t("ssid", "SSID"),
-      t("banda", "Banda / estándar"),
-      t("controlador", "Controlador"),
+      t("ssid", "cp_ssid"),
+      t("banda", "cp_banda_estandar"),
+      t("controlador", "cp_controlador"),
       notas,
     ],
   },
@@ -226,9 +244,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: SatelliteIcon,
     connectable: true,
     properties: [
-      t("rol", "Rol (autoritativo/recursivo)"),
-      t("zonas", "Zonas / dominios"),
-      t("upstreams", "Forwarders"),
+      t("rol", "cp_rol_autoritativo_recursivo"),
+      t("zonas", "cp_zonas_dominios"),
+      t("upstreams", "cp_forwarders"),
       notas,
     ],
   },
@@ -239,8 +257,8 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: ExchangeIcon,
     connectable: true,
     properties: [
-      t("rango", "Scope / rango"),
-      t("gateway", "Gateway entregado"),
+      t("rango", "cp_scope_rango"),
+      t("gateway", "cp_gateway_entregado"),
       notas,
     ],
   },
@@ -251,13 +269,13 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: ConnectIcon,
     connectable: true,
     properties: [
-      sel("protocolo", "Protocolo", [
+      sel("protocolo", "cp_protocolo", [
         { value: "wireguard", label: "WireGuard" },
         { value: "openvpn", label: "OpenVPN" },
         { value: "ipsec", label: "IPsec" },
       ]),
-      t("endpoint", "Endpoint público"),
-      t("subredes", "Subredes que expone"),
+      t("endpoint", "cp_endpoint_publico"),
+      t("subredes", "cp_subredes_que_expone"),
       notas,
     ],
   },
@@ -269,35 +287,35 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: true,
     iconProperty: "software",
     properties: [
-      sel("software", "Software", [
+      sel("software", "cp_software", [
         { value: "nginx", label: "nginx", icon: "nginx-original" },
         { value: "haproxy", label: "HAProxy" },
         { value: "traefik", label: "Traefik", icon: "traefikproxy-plain" },
       ]),
-      sel("tipo", "Tipo", [
+      sel("tipo", "cp_tipo", [
         { value: "l4", label: "L4" },
         { value: "l7", label: "L7" },
       ]),
-      t("vip", "VIP + puertos"),
-      t("backends", "Backends / pool"),
+      t("vip", "cp_vip_puertos"),
+      t("backends", "cp_backends_pool"),
       notas,
     ],
   },
   cdn: {
     kind: "cdn",
     category: "network",
-    label: "CDN",
+    label: "CDN / Edge",
     icon: CloudServerIcon,
     connectable: false,
     iconProperty: "proveedor",
     properties: [
-      sel("proveedor", "Proveedor", [
+      sel("proveedor", "cp_proveedor", [
         { value: "cloudflare", label: "Cloudflare", icon: "cloudflare-plain" },
         { value: "fastly", label: "Fastly" },
         { value: "akamai", label: "Akamai" },
       ]),
-      t("dominios", "Dominios servidos"),
-      t("origen", "Origen(es)"),
+      t("dominios", "cp_dominios_servidos"),
+      t("origen", "cp_origen_es"),
       notas,
     ],
   },
@@ -310,10 +328,10 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: FirewallIcon,
     connectable: true,
     properties: [
-      t("modelo", "Marca / modelo"),
-      t("firmware", "Firmware"),
-      t("zonas", "Zonas / interfaces"),
-      t("url_admin", "URL admin"),
+      t("modelo", "cp_marca_modelo"),
+      t("firmware", "cp_firmware"),
+      t("zonas", "cp_zonas_interfaces"),
+      t("url_admin", "cp_url_admin"),
       notas,
     ],
   },
@@ -324,13 +342,13 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: ShieldIcon,
     connectable: false,
     properties: [
-      sel("modo", "Modo", [
-        { value: "block", label: "Bloqueo" },
+      sel("modo", "cp_modo", [
+        { value: "block", label: "co_bloqueo" },
         { value: "monitor", label: "Monitor" },
       ]),
-      t("dominios", "Dominios / apps"),
-      t("ruleset", "Ruleset"),
-      t("origen", "Origen protegido"),
+      t("dominios", "cp_dominios_apps"),
+      t("ruleset", "cp_ruleset"),
+      t("origen", "cp_origen_protegido"),
       notas,
     ],
   },
@@ -341,12 +359,12 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: SecurityCheckIcon,
     connectable: true,
     properties: [
-      sel("modo", "Modo", [
-        { value: "ids", label: "Detección (IDS)" },
-        { value: "ips", label: "Prevención (IPS)" },
+      sel("modo", "cp_modo", [
+        { value: "ids", label: "co_deteccion_ids" },
+        { value: "ips", label: "co_prevencion_ips" },
       ]),
-      t("motor", "Motor (Suricata/Snort/Zeek)"),
-      t("segmentos", "Segmentos monitorizados"),
+      t("motor", "cp_motor_suricata_snort_zeek"),
+      t("segmentos", "cp_segmentos_monitorizados"),
       notas,
     ],
   },
@@ -357,9 +375,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: SquareLock02Icon,
     connectable: true,
     properties: [
-      t("os", "SO + versión"),
-      t("redes", "Redes/hosts destino"),
-      t("metodo", "Método (SSH/MFA)"),
+      t("os", "cp_so_version"),
+      t("redes", "cp_redes_hosts_destino"),
+      t("metodo", "cp_metodo_ssh_mfa"),
       notas,
     ],
   },
@@ -370,9 +388,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: KeyIcon,
     connectable: true,
     properties: [
-      t("producto", "Producto (Vault/1Password/…)"),
-      t("endpoint", "Endpoint / URL"),
-      t("auth", "Método de auth"),
+      t("producto", "cp_producto_vault_1password"),
+      t("endpoint", "cp_endpoint_url"),
+      t("auth", "cp_metodo_de_auth"),
       notas,
     ],
   },
@@ -386,15 +404,15 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "producto",
     properties: [
-      sel("producto", "Producto", [
+      sel("producto", "cp_producto", [
         { value: "okta", label: "Okta", icon: "okta-plain" },
         { value: "keycloak", label: "Keycloak" },
         { value: "auth0", label: "Auth0" },
         { value: "entra", label: "Entra ID" },
-        { value: "oauth", label: "Genérico OAuth/OIDC", icon: "oauth-plain" },
+        { value: "oauth", label: "co_generico_oauth_oidc", icon: "oauth-plain" },
       ]),
-      t("protocolos", "Protocolos (OIDC/SAML)"),
-      t("issuer", "URL / issuer"),
+      t("protocolos", "cp_protocolos_oidc_saml"),
+      t("issuer", "cp_url_issuer"),
       notas,
     ],
   },
@@ -405,12 +423,12 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: UserGroupIcon,
     connectable: true,
     properties: [
-      sel("tipo", "Tipo", [
+      sel("tipo", "cp_tipo", [
         { value: "ad", label: "Active Directory" },
         { value: "openldap", label: "OpenLDAP" },
         { value: "freeipa", label: "FreeIPA" },
       ]),
-      t("dominio", "Dominio / base DN"),
+      t("dominio", "cp_dominio_base_dn"),
       notas,
     ],
   },
@@ -423,11 +441,11 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: ServerStack01Icon,
     connectable: true,
     properties: [
-      t("hostname", "Hostname / FQDN"),
-      t("os", "SO + versión"),
-      t("recursos", "CPU / RAM / disco"),
-      t("ubicacion", "Ubicación (rack/DC)"),
-      t("oob", "Gestión OOB (iLO/IPMI)"),
+      t("hostname", "cp_hostname_fqdn"),
+      t("os", "cp_so_version"),
+      t("recursos", "cp_cpu_ram_disco"),
+      t("ubicacion", "cp_ubicacion_rack_dc"),
+      t("oob", "cp_gestion_oob_ilo_ipmi"),
       notas,
     ],
   },
@@ -438,10 +456,10 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: CpuIcon,
     connectable: true,
     properties: [
-      t("hostname", "Hostname / FQDN"),
-      t("host_padre", "Host / hypervisor padre"),
-      t("os", "SO + versión"),
-      t("recursos", "vCPU / RAM / disco"),
+      t("hostname", "cp_hostname_fqdn"),
+      t("host_padre", "cp_host_hypervisor_padre"),
+      t("os", "cp_so_version"),
+      t("recursos", "cp_vcpu_ram_disco"),
       notas,
     ],
   },
@@ -453,13 +471,13 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: true,
     iconProperty: "plataforma",
     properties: [
-      sel("plataforma", "Plataforma", [
+      sel("plataforma", "cp_plataforma", [
         { value: "proxmox", label: "Proxmox", icon: "proxmox-plain" },
         { value: "esxi", label: "VMware ESXi" },
         { value: "hyperv", label: "Hyper-V" },
       ]),
-      t("url_admin", "URL de gestión"),
-      t("capacidad", "Capacidad"),
+      t("url_admin", "cp_url_de_gestion"),
+      t("capacidad", "cp_capacidad"),
       notas,
     ],
   },
@@ -471,13 +489,13 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "runtime",
     properties: [
-      sel("runtime", "Runtime", [
+      sel("runtime", "cp_runtime", [
         { value: "docker", label: "Docker", icon: "docker-plain" },
         { value: "podman", label: "Podman", icon: "podman-plain" },
       ]),
-      t("imagen", "Imagen + tag"),
-      t("host", "Host que lo ejecuta"),
-      t("puertos", "Puertos publicados"),
+      t("imagen", "cp_imagen_tag"),
+      t("host", "cp_host_que_lo_ejecuta"),
+      t("puertos", "cp_puertos_publicados"),
       notas,
     ],
   },
@@ -489,7 +507,7 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: true,
     iconProperty: "distribucion",
     properties: [
-      sel("distribucion", "Distribución", [
+      sel("distribucion", "cp_distribucion", [
         { value: "kubernetes", label: "Kubernetes", icon: "kubernetes-plain" },
         { value: "k3s", label: "k3s", icon: "kubernetes-plain" },
         { value: "rancher", label: "Rancher", icon: "rancher-plain" },
@@ -497,9 +515,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
         { value: "gke", label: "GKE", icon: "googlecloud-plain" },
         { value: "aks", label: "AKS", icon: "azure-plain" },
       ]),
-      t("endpoint", "API endpoint"),
-      t("nodos", "Nº nodos / pools"),
-      t("namespaces", "Namespaces clave"),
+      t("endpoint", "cp_api_endpoint"),
+      t("nodos", "cp_n_nodos_pools"),
+      t("namespaces", "cp_namespaces_clave"),
       notas,
     ],
   },
@@ -511,10 +529,10 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "plataforma",
     properties: [
-      sel("plataforma", "Plataforma", CLOUDS),
-      t("runtime", "Runtime"),
-      t("trigger", "Trigger (HTTP/evento/cron)"),
-      t("url", "URL"),
+      sel("plataforma", "cp_plataforma", CLOUDS),
+      t("runtime", "cp_runtime"),
+      t("trigger", "cp_trigger_http_evento_cron"),
+      t("url", "cp_url"),
       notas,
     ],
   },
@@ -524,7 +542,7 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     label: "Genérico",
     icon: ComputerIcon,
     connectable: true,
-    properties: [t("hostname", "Hostname"), notas],
+    properties: [t("hostname", "cp_hostname"), notas],
   },
 
   // ── Aplicación ─────────────────────────────────────────────────────────
@@ -535,10 +553,10 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: ApiIcon,
     connectable: false,
     properties: [
-      t("producto", "Producto (Kong/APIM/…)"),
-      t("rutas", "Rutas / endpoints"),
-      t("auth", "Auth (keys/OAuth/JWT)"),
-      t("upstreams", "Upstreams"),
+      t("producto", "cp_producto_kong_apim"),
+      t("rutas", "cp_rutas_endpoints"),
+      t("auth", "cp_auth_keys_oauth_jwt"),
+      t("upstreams", "cp_upstreams"),
       notas,
     ],
   },
@@ -550,15 +568,15 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "software",
     properties: [
-      sel("software", "Software", [
+      sel("software", "cp_software", [
         { value: "nginx", label: "nginx", icon: "nginx-original" },
         { value: "traefik", label: "Traefik", icon: "traefikproxy-plain" },
         { value: "apache", label: "Apache", icon: "apache-plain" },
         { value: "haproxy", label: "HAProxy" },
       ]),
-      t("escucha", "Host:puerto de escucha"),
-      t("upstreams", "Backends"),
-      t("dominios", "Vhosts / dominios"),
+      t("escucha", "cp_host_puerto_de_escucha"),
+      t("upstreams", "cp_backends"),
+      t("dominios", "cp_vhosts_dominios"),
       notas,
     ],
   },
@@ -570,13 +588,13 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "software",
     properties: [
-      sel("software", "Software", [
+      sel("software", "cp_software", [
         { value: "nginx", label: "nginx", icon: "nginx-original" },
         { value: "apache", label: "Apache", icon: "apache-plain" },
       ]),
-      t("url", "URL", "https://sitio.ejemplo.com"),
-      t("sitios", "Sitios / vhosts"),
-      t("puertos", "Puertos (80/443)"),
+      t("url", "cp_url", "cph_https_sitio_ejemplo_com"),
+      t("sitios", "cp_sitios_vhosts"),
+      t("puertos", "cp_puertos_80_443"),
       notas,
     ],
   },
@@ -588,12 +606,12 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "framework",
     properties: [
-      sel("framework", "Runtime / framework", APP_FRAMEWORKS),
-      t("url", "URL", "https://app.ejemplo.com"),
-      t("version", "Versión"),
-      t("repo", "Repositorio"),
-      t("puerto", "Puerto"),
-      t("dependencias", "Dependencias (BD/cache/colas)"),
+      sel("framework", "cp_runtime_framework", APP_FRAMEWORKS),
+      t("url", "cp_url", "cph_https_app_ejemplo_com"),
+      t("version", "cp_version"),
+      t("repo", "cp_repositorio"),
+      t("puerto", "cp_puerto"),
+      t("dependencias", "cp_dependencias_bd_cache_colas"),
       notas,
     ],
   },
@@ -605,13 +623,13 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "runtime",
     properties: [
-      sel("runtime", "Runtime", APP_FRAMEWORKS),
-      sel("tipo", "Tipo", [
+      sel("runtime", "cp_runtime", APP_FRAMEWORKS),
+      sel("tipo", "cp_tipo", [
         { value: "cron", label: "Cron" },
-        { value: "queue", label: "Cola" },
+        { value: "queue", label: "co_cola" },
         { value: "stream", label: "Stream" },
       ]),
-      t("origen", "Programación / cola origen"),
+      t("origen", "cp_programacion_cola_origen"),
       notas,
     ],
   },
@@ -625,20 +643,39 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: true,
     iconProperty: "gestor",
     properties: [
-      sel("gestor", "Gestor", DB_ENGINES),
-      sel("modelo", "Modelo", [
-        { value: "relacional", label: "Relacional" },
-        { value: "documental", label: "Documental" },
-        { value: "grafo", label: "Grafo" },
-        { value: "keyvalue", label: "Clave-valor / caché" },
-        { value: "busqueda", label: "Búsqueda" },
+      sel("gestor", "cp_gestor", DB_ENGINES),
+      sel("modelo", "cp_modelo", [
+        { value: "relacional", label: "co_relacional" },
+        { value: "documental", label: "co_documental" },
+        { value: "grafo", label: "co_grafo" },
+        { value: "keyvalue", label: "co_clave_valor_cache" },
+        { value: "busqueda", label: "co_busqueda" },
         { value: "timeseries", label: "Time-series" },
       ]),
-      t("version", "Versión"),
-      t("hostname", "Hostname / FQDN"),
-      t("instancia", "Nombre BD / instancia"),
-      t("replicacion", "Replicación / HA"),
-      t("backup", "Backup (destino/frecuencia)"),
+      t("version", "cp_version"),
+      t("hostname", "cp_hostname_fqdn"),
+      t("instancia", "cp_nombre_bd_instancia"),
+      t("replicacion", "cp_replicacion_ha"),
+      t("backup", "cp_backup_destino_frecuencia"),
+      notas,
+    ],
+  },
+  baas: {
+    kind: "baas",
+    category: "data",
+    label: "BaaS",
+    icon: CloudServerIcon,
+    connectable: false,
+    iconProperty: "proveedor",
+    properties: [
+      sel("proveedor", "cp_proveedor", BAAS_PROVIDERS),
+      sel("hosting", "cp_hosting", [
+        { value: "managed", label: "co_gestionado" },
+        { value: "selfhosted", label: "co_self_hosted" },
+      ]),
+      t("servicios", "cp_servicios"),
+      t("url", "cp_url"),
+      t("proyecto", "cp_proyecto"),
       notas,
     ],
   },
@@ -652,9 +689,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "proveedor",
     properties: [
-      sel("proveedor", "Proveedor", CLOUDS),
-      t("endpoint", "Endpoint"),
-      t("bucket", "Bucket(s)"),
+      sel("proveedor", "cp_proveedor", CLOUDS),
+      t("endpoint", "cp_endpoint"),
+      t("bucket", "cp_bucket_s"),
       notas,
     ],
   },
@@ -665,8 +702,8 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: HardDriveIcon,
     connectable: true,
     properties: [
-      t("protocolo", "Protocolo (NFS/SMB)"),
-      t("capacidad", "Capacidad"),
+      t("protocolo", "cp_protocolo_nfs_smb"),
+      t("capacidad", "cp_capacidad"),
       notas,
     ],
   },
@@ -677,9 +714,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: Archive01Icon,
     connectable: false,
     properties: [
-      t("destino", "Destino"),
-      t("frecuencia", "Frecuencia"),
-      t("retencion", "Retención"),
+      t("destino", "cp_destino"),
+      t("frecuencia", "cp_frecuencia"),
+      t("retencion", "cp_retencion"),
       notas,
     ],
   },
@@ -693,13 +730,13 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: true,
     iconProperty: "producto",
     properties: [
-      sel("producto", "Producto", [
+      sel("producto", "cp_producto", [
         { value: "rabbitmq", label: "RabbitMQ", icon: "rabbitmq-original" },
         { value: "sqs", label: "Amazon SQS", icon: "amazonwebservices-plain-wordmark" },
         { value: "activemq", label: "ActiveMQ" },
       ]),
-      t("hostname", "Hostname / FQDN"),
-      t("colas", "Colas / exchanges"),
+      t("hostname", "cp_hostname_fqdn"),
+      t("colas", "cp_colas_exchanges"),
       notas,
     ],
   },
@@ -711,13 +748,13 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: true,
     iconProperty: "producto",
     properties: [
-      sel("producto", "Producto", [
+      sel("producto", "cp_producto", [
         { value: "kafka", label: "Apache Kafka", icon: "apachekafka-original" },
         { value: "pulsar", label: "Apache Pulsar" },
       ]),
-      t("brokers", "Brokers / bootstrap"),
-      t("topics", "Topics"),
-      t("retencion", "Retención"),
+      t("brokers", "cp_brokers_bootstrap"),
+      t("topics", "cp_topics"),
+      t("retencion", "cp_retencion"),
       notas,
     ],
   },
@@ -731,13 +768,13 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "producto",
     properties: [
-      sel("producto", "Producto", [
+      sel("producto", "cp_producto", [
         { value: "prometheus", label: "Prometheus", icon: "prometheus-original" },
         { value: "grafana", label: "Grafana", icon: "grafana-plain" },
         { value: "zabbix", label: "Zabbix" },
       ]),
-      t("url", "URL"),
-      t("targets", "Targets vigilados"),
+      t("url", "cp_url"),
+      t("targets", "cp_targets_vigilados"),
       notas,
     ],
   },
@@ -749,13 +786,13 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "stack",
     properties: [
-      sel("stack", "Stack", [
+      sel("stack", "cp_stack", [
         { value: "elastic", label: "Elastic (ELK)", icon: "elasticsearch-plain" },
         { value: "loki", label: "Loki", icon: "grafana-plain" },
         { value: "graylog", label: "Graylog" },
       ]),
-      t("endpoint", "Endpoint de ingesta"),
-      t("retencion", "Retención"),
+      t("endpoint", "cp_endpoint_de_ingesta"),
+      t("retencion", "cp_retencion"),
       notas,
     ],
   },
@@ -766,9 +803,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: AnalyticsUpIcon,
     connectable: false,
     properties: [
-      t("producto", "Producto (Datadog/Jaeger…)"),
-      t("apps", "Apps instrumentadas"),
-      t("endpoint", "Endpoint"),
+      t("producto", "cp_producto_datadog_jaeger"),
+      t("apps", "cp_apps_instrumentadas"),
+      t("endpoint", "cp_endpoint"),
       notas,
     ],
   },
@@ -782,10 +819,10 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     connectable: false,
     iconProperty: "proveedor",
     properties: [
-      sel("proveedor", "Proveedor", CLOUDS),
-      t("url", "URL"),
-      t("proposito", "Propósito"),
-      t("criticidad", "Criticidad"),
+      sel("proveedor", "cp_proveedor", CLOUDS),
+      t("url", "cp_url"),
+      t("proposito", "cp_proposito"),
+      t("criticidad", "cp_criticidad"),
       notas,
     ],
   },
@@ -796,9 +833,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: ApiIcon,
     connectable: false,
     properties: [
-      t("base_url", "Base URL"),
-      t("auth", "Auth (key/OAuth)"),
-      t("rate_limits", "Rate limits"),
+      t("base_url", "cp_base_url"),
+      t("auth", "cp_auth_key_oauth"),
+      t("rate_limits", "cp_rate_limits"),
       notas,
     ],
   },
@@ -811,10 +848,10 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: UserIcon,
     connectable: false,
     properties: [
-      t("rol", "Rol / persona"),
-      sel("origen", "Origen", [
-        { value: "interno", label: "Interno" },
-        { value: "externo", label: "Externo" },
+      t("rol", "cp_rol_persona"),
+      sel("origen", "cp_origen", [
+        { value: "interno", label: "co_interno" },
+        { value: "externo", label: "co_externo" },
       ]),
       notas,
     ],
@@ -826,8 +863,8 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: LaptopIcon,
     connectable: true,
     properties: [
-      t("os", "SO"),
-      t("usuario", "Usuario asignado"),
+      t("os", "cp_so"),
+      t("usuario", "cp_usuario_asignado"),
       notas,
     ],
   },
@@ -838,11 +875,11 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: SmartPhone01Icon,
     connectable: false,
     properties: [
-      sel("plataforma", "Plataforma", [
+      sel("plataforma", "cp_plataforma", [
         { value: "android", label: "Android" },
         { value: "ios", label: "iOS" },
       ]),
-      t("proposito", "Propósito"),
+      t("proposito", "cp_proposito"),
       notas,
     ],
   },
@@ -855,21 +892,23 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: FrameIcon,
     connectable: false,
     properties: [
-      sel("tipo", "Tipo", [
-        { value: "zona", label: "Zona / ambiente" },
+      sel("tipo", "cp_tipo", [
+        { value: "zona", label: "co_zona_ambiente" },
         { value: "vpc", label: "VPC" },
-        { value: "subred", label: "Subred" },
-        { value: "region", label: "Región" },
+        { value: "subred", label: "co_subred" },
+        { value: "region", label: "co_region" },
         { value: "datacenter", label: "Datacenter" },
+        { value: "docker_compose", label: "Docker Compose", icon: "docker-plain" },
+        { value: "k8s_namespace", label: "Kubernetes", icon: "kubernetes-plain" },
       ]),
-      t("cidr", "CIDR / rango"),
-      sel("color", "Color", [
-        { value: "slate", label: "Gris" },
-        { value: "green", label: "Verde" },
-        { value: "blue", label: "Azul" },
-        { value: "amber", label: "Ámbar" },
-        { value: "rose", label: "Rosa" },
-        { value: "violet", label: "Violeta" },
+      t("cidr", "cp_cidr_rango"),
+      sel("color", "cp_color", [
+        { value: "slate", label: "co_gris" },
+        { value: "green", label: "co_verde" },
+        { value: "blue", label: "co_azul" },
+        { value: "amber", label: "co_ambar" },
+        { value: "rose", label: "co_rosa" },
+        { value: "violet", label: "co_violeta" },
       ]),
       notas,
     ],

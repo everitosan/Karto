@@ -53,6 +53,7 @@ export type NodeKind =
   | "worker"
   // Datos
   | "database"
+  | "baas"
   // Almacenamiento
   | "object_storage"
   | "nas"

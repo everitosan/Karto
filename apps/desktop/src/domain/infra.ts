@@ -2,16 +2,15 @@
 // aristas, credenciales). Los nombres de campo casan con la serialización
 // `camelCase` del backend Rust.
 //
-// El catálogo de tipos de nodo (categorías, etiquetas, propiedades e iconos)
-// es la fuente compartida en `@karto/catalog`; aquí solo se re-exporta.
+// El catálogo de tipos de nodo (categorías, propiedades e iconos) es dato
+// agnóstico de idioma en `@karto/catalog`; aquí solo se re-exporta la estructura.
+// Las *etiquetas* visibles (categoría/tipo) se traducen en `$i18n/catalog`, no en
+// el dominio ni en el paquete compartido.
 export type { NodeKind, NodeCategory } from "@karto/catalog";
 export {
   NODE_KINDS,
-  NODE_KIND_LABELS,
   NODE_CATALOG,
   NODE_CATEGORIES,
-  CATEGORY_LABELS,
-  nodesByCategory,
   resolveNodeIcon,
 } from "@karto/catalog";
 

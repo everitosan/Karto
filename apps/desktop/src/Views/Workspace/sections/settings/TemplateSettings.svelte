@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import { Button } from "@karto/ui";
   import { templatesUseCases, type Template, type VaultTemplate } from "$usecases/templates";
+  import { m } from "$paraglide/messages.js";
 
   let templates = $state<Template[]>([]);
   let linked = $state<VaultTemplate[]>([]);
@@ -51,10 +52,8 @@
 
 <section class="group">
   <p class="hint">
-    Comando interno con placeholders: <code>{"{host}"}</code> <code>{"{port}"}</code>
-    <code>{"{user}"}</code> <code>{"{key}"}</code> <code>{"{userhost}"}</code>. La biblioteca es de
-    esta máquina; al <strong>ligar</strong> una plantilla se copia al vault y viaja con el
-    <code>.karto</code> (SSH en Linux por ahora).
+    {m.tpl_hint_placeholders()}: <code>{"{host}"}</code> <code>{"{port}"}</code>
+    <code>{"{user}"}</code> <code>{"{key}"}</code> <code>{"{userhost}"}</code>. {@html m.tpl_hint_rest()}
   </p>
 
   <ul class="tpl-list">
@@ -66,16 +65,16 @@
           <span class="tpl-name">
             {tpl.name}
             <span class="tag">{tpl.connection}</span>
-            {#if isLinked}<span class="tag linked">ligada al vault</span>{/if}
+            {#if isLinked}<span class="tag linked">{m.tpl_linked_tag()}</span>{/if}
           </span>
           <code class="tpl-cmd">{tpl.command}</code>
         </div>
         <div class="tpl-actions">
           <Button variant="secondary" onclick={() => linkTemplate(tpl.id)}>
-            {isLinked ? "Reemplazar" : "Ligar al vault"}
+            {isLinked ? m.tpl_replace() : m.tpl_link()}
           </Button>
           {#if !tpl.isDefault}
-            <button class="link-btn" onclick={() => removeTemplate(tpl.id)}>Eliminar</button>
+            <button class="link-btn" onclick={() => removeTemplate(tpl.id)}>{m.common_delete()}</button>
           {/if}
         </div>
       </li>
@@ -83,7 +82,7 @@
   </ul>
 
   {#if linked.length > 0}
-    <h4>Ligadas en este vault</h4>
+    <h4>{m.tpl_linked_heading()}</h4>
     <ul class="tpl-list">
       {#each linked as l (l.connection)}
         <li class="tpl">
@@ -91,22 +90,22 @@
             <span class="tpl-name"><span class="tag">{l.connection}</span></span>
             <code class="tpl-cmd">{l.command}</code>
           </div>
-          <button class="link-btn" onclick={() => unlinkTemplate(l.connection)}>Desligar</button>
+          <button class="link-btn" onclick={() => unlinkTemplate(l.connection)}>{m.tpl_unlink()}</button>
         </li>
       {/each}
     </ul>
   {/if}
 
   <div class="tpl-form">
-    <input class="tpl-input" placeholder="Nombre" bind:value={tplName} />
+    <input class="tpl-input" placeholder={m.common_name()} bind:value={tplName} />
     <select class="tpl-input sel" bind:value={tplConnection}>
       <option value="ssh">ssh</option>
       <option value="vnc">vnc</option>
       <option value="web">web</option>
       <option value="rdp">rdp</option>
     </select>
-    <input class="tpl-input cmd" placeholder="Comando con placeholders" bind:value={tplCommand} />
-    <Button onclick={addTemplate} disabled={!tplName.trim() || !tplCommand.trim()}>Añadir</Button>
+    <input class="tpl-input cmd" placeholder={m.tpl_command_placeholder()} bind:value={tplCommand} />
+    <Button onclick={addTemplate} disabled={!tplName.trim() || !tplCommand.trim()}>{m.common_add()}</Button>
   </div>
 </section>
 
@@ -125,7 +124,7 @@
     margin: 0 0 0.75rem;
     max-width: 48rem;
   }
-  .hint code {
+  .hint :global(code) {
     font-size: 0.72rem;
     background: var(--karto-color-surface);
     padding: 0 0.2rem;

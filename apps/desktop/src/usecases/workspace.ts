@@ -138,6 +138,11 @@ export function makeWorkspaceUseCases(io: Bridge = bridge) {
       contextId: string | null = null,
     ) => io.invoke<void>("connect_node", { nodeId, credentialId, contextId }),
 
+    // Autoriza (en esta máquina) ejecutar las plantillas de conexión que trae el
+    // vault abierto. Se llama tras confirmar el aviso de `connect_node` cuando el
+    // vault es importado y trae una plantilla personalizada.
+    trustVaultTemplates: () => io.invoke<void>("vault_trust_templates", {}),
+
     // Abre en el navegador la URL de administración del nodo (propiedad
     // `url_admin`/`url`). No usa credenciales: abrir un enlace no requiere secreto.
     openNodeUrl: (nodeId: string) => io.invoke<void>("open_node_url", { nodeId }),
@@ -168,9 +173,10 @@ export function makeWorkspaceUseCases(io: Bridge = bridge) {
     // Parsea un archivo de config SSH concreto (sugerencia o soltado).
     sshImportParseFile: (path: string) =>
       io.invoke<ImportedHost[]>("ssh_import_parse_file", { path }),
-    // Crea un nodo (con credencial SSH) por host en el diagrama destino.
-    sshImportHosts: (mapId: string, hosts: ImportedHost[]) =>
-      io.invoke<InfraNode[]>("ssh_import_hosts", { mapId, hosts }),
+    // Crea un nodo (con credencial SSH) por host en el diagrama destino. La IP
+    // se registra como dirección del contexto `contextId` elegido.
+    sshImportHosts: (mapId: string, contextId: string, hosts: ImportedHost[]) =>
+      io.invoke<InfraNode[]>("ssh_import_hosts", { mapId, contextId, hosts }),
   };
 }
 

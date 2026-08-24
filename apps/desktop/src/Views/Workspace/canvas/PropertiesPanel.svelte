@@ -4,7 +4,9 @@
   import { Icon, TechIcon, Tabs, Markdown, icons, type TabItem } from "@karto/ui";
   import { resolveNodeIcon } from "@karto/catalog";
   import type { Credential, NodeKind } from "$domain/infra";
-  import { NODE_KIND_LABELS, NODE_CATALOG } from "$domain/infra";
+  import { NODE_CATALOG } from "$domain/infra";
+  import { nodeKindLabel, catalogText } from "$i18n/catalog";
+  import { m } from "$paraglide/messages.js";
   import { workspaceUseCases as uc } from "$usecases/workspace";
   import CredentialModal, { type CredentialDraft } from "./CredentialModal.svelte";
   import { clipboardManager } from "../clipboard";
@@ -47,11 +49,11 @@
   // Pestañas del panel. "Dirección" solo aplica a nodos conectables.
   const tabs = $derived<TabItem[]>([
     ...(spec.connectable
-      ? [{ id: "address", icon: icons.address, label: "Dirección" }]
+      ? [{ id: "address", icon: icons.address, label: m.props_tab_address() }]
       : []),
-    { id: "properties", icon: icons.settings, label: "Propiedades" },
-    { id: "credentials", icon: icons.key, label: "Credenciales" },
-    { id: "notes", icon: icons.notes, label: "Notas" },
+    { id: "properties", icon: icons.settings, label: m.props_tab_properties() },
+    { id: "credentials", icon: icons.key, label: m.props_tab_credentials() },
+    { id: "notes", icon: icons.notes, label: m.props_tab_notes() },
   ]);
 
   // Valores de las propiedades del catálogo (por su `key`).
@@ -207,7 +209,7 @@
   }
 
   async function removeCredential(cred: Credential) {
-    if (!confirm(`¿Eliminar la credencial ${cred.kind}?`)) return;
+    if (!confirm(m.props_delete_cred_confirm({ kind: cred.kind }))) return;
     await uc.deleteCredential(cred.id);
     await reloadCredentials();
   }
@@ -256,6 +258,12 @@
     }
   }
 
+  // Copia la URL del nodo. No es un secreto: sin limpieza automática (0).
+  async function copyUrl() {
+    if (!nodeUrl) return;
+    await clipboardManager.copy(nodeUrl, 0);
+  }
+
 </script>
 
 <aside class="panel">
@@ -265,14 +273,14 @@
     {:else}
       <Icon icon={headerIcon.icon} size={18} />
     {/if}
-    <span class="kind">{NODE_KIND_LABELS[kind]}</span>
-    <button class="icon-btn" title="Cerrar" onclick={onClose}>
+    <span class="kind">{nodeKindLabel(kind)}</span>
+    <button class="icon-btn" title={m.common_close()} onclick={onClose}>
       <Icon icon={icons.close} size={16} />
     </button>
   </header>
 
   <label class="field">
-    <span>Etiqueta</span>
+    <span>{m.props_label()}</span>
     <input
       value={label}
       onchange={(e) => onLabel((e.target as HTMLInputElement).value)}
@@ -282,18 +290,23 @@
   {#if spec.connectable}
     <button
       class="connect"
-      title="Conectar con la credencial predeterminada"
+      title={m.props_connect_default_title()}
       disabled={credentials.length === 0}
       onclick={() => connect()}
     >
-      <Icon icon={icons.connect} size={15} /> Conectar
+      <Icon icon={icons.connect} size={15} /> {m.menu_connect()}
     </button>
   {/if}
 
   {#if nodeUrl}
-    <button class="connect open-url" title={`Abrir ${nodeUrl}`} onclick={openUrl}>
-      <Icon icon={icons.link} size={15} /> Abrir
-    </button>
+    <div class="url-row">
+      <button class="connect open-url" title={m.props_open_url_title({ url: nodeUrl })} onclick={openUrl}>
+        <Icon icon={icons.link} size={15} /> {m.props_open()}
+      </button>
+      <button class="icon-btn" title={m.common_copy()} onclick={copyUrl}>
+        <Icon icon={icons.copy} size={15} />
+      </button>
+    </div>
   {/if}
 
   <Tabs {tabs}>
@@ -302,37 +315,37 @@
         <section>
           {#each networkContext.contexts as ctx (ctx.id)}
             <label class="field" class:active-ctx={ctx.id === networkContext.activeId}>
-              <span>{ctx.name}{ctx.id === networkContext.activeId ? " (activo)" : ""}</span>
+              <span>{ctx.name}{ctx.id === networkContext.activeId ? ` (${m.props_active_suffix()})` : ""}</span>
               <input
-                placeholder="IP o host en este contexto"
+                placeholder={m.props_address_placeholder()}
                 bind:value={endpointValues[ctx.id]}
                 onblur={commitEndpoints}
               />
             </label>
           {/each}
-          <p class="muted">Si un contexto no tiene dirección, se usa el hostname.</p>
+          <p class="muted">{m.props_address_hint()}</p>
         </section>
       {:else if active === "properties"}
         <section>
           <div class="section-head">
-            <h4>Propiedades</h4>
-            <button class="icon-btn" title="Añadir propiedad" onclick={addPair}>
+            <h4>{m.props_tab_properties()}</h4>
+            <button class="icon-btn" title={m.props_add_property()} onclick={addPair}>
               <Icon icon={icons.add} size={15} />
             </button>
           </div>
           {#each specProps as p (p.key)}
             <label class="field">
-              <span>{p.label}</span>
+              <span>{catalogText(p.label)}</span>
               {#if p.type === "select"}
                 <select bind:value={values[p.key]} onchange={commitProperties}>
                   <option value="">—</option>
                   {#each p.options ?? [] as opt (opt.value)}
-                    <option value={opt.value}>{opt.label}</option>
+                    <option value={opt.value}>{catalogText(opt.label)}</option>
                   {/each}
                 </select>
               {:else}
                 <input
-                  placeholder={p.placeholder ?? ""}
+                  placeholder={catalogText(p.placeholder)}
                   bind:value={values[p.key]}
                   onblur={commitProperties}
                 />
@@ -341,11 +354,11 @@
           {/each}
 
           {#if extraPairs.length > 0}
-            <h4 class="extra-head">Otras</h4>
+            <h4 class="extra-head">{m.props_others()}</h4>
             {#each extraPairs as pair, i (i)}
               <div class="pair">
-                <input class="key" placeholder="clave" bind:value={pair.key} onblur={commitProperties} />
-                <input class="value" placeholder="valor" bind:value={pair.value} onblur={commitProperties} />
+                <input class="key" placeholder={m.props_key_placeholder()} bind:value={pair.key} onblur={commitProperties} />
+                <input class="value" placeholder={m.props_value_placeholder()} bind:value={pair.value} onblur={commitProperties} />
               </div>
             {/each}
           {/if}
@@ -353,8 +366,8 @@
       {:else if active === "credentials"}
         <section>
           <div class="section-head">
-            <h4>Credenciales</h4>
-            <button class="icon-btn" title="Añadir credencial" onclick={openNew}>
+            <h4>{m.props_tab_credentials()}</h4>
+            <button class="icon-btn" title={m.props_add_credential()} onclick={openNew}>
               <Icon icon={icons.add} size={15} />
             </button>
           </div>
@@ -363,49 +376,49 @@
             <div class="cred">
               <div class="cred-top">
                 <span class="badge">{cred.kind.toUpperCase()}</span>
-                {#if cred.isDefault}<span class="default">por defecto</span>{/if}
+                {#if cred.isDefault}<span class="default">{m.props_default()}</span>{/if}
                 <span class="user">{cred.username ?? "—"}{cred.port ? `:${cred.port}` : ""}</span>
               </div>
               <div class="cred-secret">
-                <code>{revealed[cred.id] !== undefined ? (revealed[cred.id] || "(vacío)") : "••••••••"}</code>
-                <button class="icon-btn" title="Mostrar/ocultar" onclick={() => toggleReveal(cred)}>
+                <code>{revealed[cred.id] !== undefined ? (revealed[cred.id] || m.props_empty_secret()) : "••••••••"}</code>
+                <button class="icon-btn" title={m.password_toggle()} onclick={() => toggleReveal(cred)}>
                   <Icon icon={revealed[cred.id] !== undefined ? icons.eyeOff : icons.eye} size={15} />
                 </button>
-                <button class="icon-btn" title="Copiar" onclick={() => copySecret(cred)}>
+                <button class="icon-btn" title={m.common_copy()} onclick={() => copySecret(cred)}>
                   <Icon icon={icons.copy} size={15} />
                 </button>
-                <button class="icon-btn" title="Editar" onclick={() => openEdit(cred)}>
+                <button class="icon-btn" title={m.common_edit()} onclick={() => openEdit(cred)}>
                   <Icon icon={icons.edit} size={15} />
                 </button>
                 {#if spec.connectable}
-                  <button class="icon-btn" title="Conectar con esta credencial" onclick={() => connect(cred.id)}>
+                  <button class="icon-btn" title={m.props_connect_this()} onclick={() => connect(cred.id)}>
                     <Icon icon={icons.connect} size={15} />
                   </button>
                 {/if}
                 {#if !cred.isDefault}
-                  <button class="icon-btn" title="Marcar por defecto" onclick={() => makeDefault(cred)}>
+                  <button class="icon-btn" title={m.props_make_default()} onclick={() => makeDefault(cred)}>
                     <Icon icon={icons.key} size={15} />
                   </button>
                 {/if}
-                <button class="icon-btn" title="Eliminar" onclick={() => removeCredential(cred)}>
+                <button class="icon-btn" title={m.common_delete()} onclick={() => removeCredential(cred)}>
                   <Icon icon={icons.delete} size={15} />
                 </button>
               </div>
             </div>
           {/each}
           {#if credentials.length === 0}
-            <p class="muted">Sin credenciales.</p>
+            <p class="muted">{m.props_no_credentials()}</p>
           {/if}
         </section>
       {:else if active === "notes"}
         <section>
           <div class="section-head">
-            <h4>Notas</h4>
+            <h4>{m.props_tab_notes()}</h4>
             <div class="notes-toggle">
               <button
                 class="icon-btn"
                 class:on={notesEditing}
-                title="Editar (Markdown)"
+                title={m.props_notes_edit()}
                 aria-pressed={notesEditing}
                 onclick={() => (notesEditing = true)}
               >
@@ -414,7 +427,7 @@
               <button
                 class="icon-btn"
                 class:on={!notesEditing}
-                title="Vista"
+                title={m.props_notes_view()}
                 aria-pressed={!notesEditing}
                 onclick={() => { commitProperties(); notesEditing = false; }}
               >
@@ -425,12 +438,12 @@
           {#if notesEditing}
             <textarea
               rows="10"
-              placeholder="Markdown: **negrita**, listas, [enlaces](url)…"
+              placeholder={m.props_notes_placeholder()}
               bind:value={values.notas}
               onblur={commitProperties}
             ></textarea>
           {:else}
-            <Markdown source={values.notas} empty="Sin notas todavía." />
+            <Markdown source={values.notas} empty={m.props_notes_empty()} />
           {/if}
         </section>
       {/if}
@@ -438,7 +451,7 @@
   </Tabs>
 
   <button class="delete-node" onclick={onDeleteNode}>
-    <Icon icon={icons.delete} size={14} /> Eliminar nodo
+    <Icon icon={icons.delete} size={14} /> {m.menu_delete_node()}
   </button>
 </aside>
 
@@ -561,6 +574,15 @@
   .connect:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+  /* Fila de URL: "Abrir" ocupa el ancho y el botón de copiar va al lado. */
+  .url-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0.35rem;
+  }
+  .url-row .open-url {
+    flex: 1;
   }
   /* "Abrir" (URL web): acción secundaria neutra, distinta del verde de Conectar. */
   .open-url {

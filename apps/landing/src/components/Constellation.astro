@@ -1,0 +1,143 @@
+---
+// Constelación del hero: 7 nodos de infraestructura unidos como carta estelar.
+// Las aristas se "trazan" al cargar, los halos respiran y dos pulsos verdes
+// recorren aristas como latido del health check. Es el producto y la metáfora.
+---
+
+<svg
+  class="constellation"
+  viewBox="0 0 760 300"
+  role="img"
+  aria-label="Constelación de servidores, routers y bases de datos conectados"
+>
+  <g class="edges">
+    <line class="edge" x1="120" y1="200" x2="290" y2="90" />
+    <line class="edge" x1="290" y1="90" x2="420" y2="170" />
+    <line class="edge" x1="420" y1="170" x2="600" y2="80" />
+    <line class="edge" x1="420" y1="170" x2="560" y2="240" />
+    <line class="edge" x1="120" y1="200" x2="250" y2="255" />
+    <line class="edge" x1="250" y1="255" x2="420" y2="170" />
+    <line class="edge" x1="600" y1="80" x2="680" y2="190" />
+  </g>
+
+  <!-- pulsos de salud: router → web-01 y web-01 → pg-main -->
+  <circle class="pulse" r="3" style="offset-path: path('M290 90 L420 170')" />
+  <circle class="pulse pulse-b" r="3" style="offset-path: path('M420 170 L600 80')" />
+
+  <g class="node" style="--d: 0s">
+    <circle class="halo" cx="120" cy="200" r="22" />
+    <circle class="ring" cx="120" cy="200" r="13" />
+    <circle class="core" cx="120" cy="200" r="4" />
+    <text x="120" y="238" text-anchor="middle">fw-edge · 10.0.0.1</text>
+  </g>
+  <g class="node" style="--d: 0.7s">
+    <circle class="halo" cx="290" cy="90" r="26" />
+    <circle class="ring" cx="290" cy="90" r="15" />
+    <circle class="core" cx="290" cy="90" r="5" />
+    <text x="290" y="58" text-anchor="middle">rt-core · 10.0.0.254</text>
+  </g>
+  <g class="node" style="--d: 1.4s">
+    <circle class="halo" cx="420" cy="170" r="24" />
+    <circle class="ring" cx="420" cy="170" r="14" />
+    <circle class="core" cx="420" cy="170" r="5" />
+    <text x="420" y="206" text-anchor="middle">web-01 · 10.0.0.4</text>
+  </g>
+  <g class="node" style="--d: 2.1s">
+    <circle class="halo" cx="600" cy="80" r="22" />
+    <circle class="ring" cx="600" cy="80" r="13" />
+    <circle class="core" cx="600" cy="80" r="4" />
+    <text x="600" y="48" text-anchor="middle">pg-main · 10.0.1.20</text>
+  </g>
+  <g class="node" style="--d: 2.8s">
+    <circle class="halo" cx="560" cy="240" r="20" />
+    <circle class="ring" cx="560" cy="240" r="12" />
+    <circle class="core" cx="560" cy="240" r="4" />
+    <text x="560" y="274" text-anchor="middle">nas-lab · 192.168.1.9</text>
+  </g>
+  <g class="node" style="--d: 3.5s">
+    <circle class="halo" cx="250" cy="255" r="20" />
+    <circle class="ring" cx="250" cy="255" r="12" />
+    <circle class="core" cx="250" cy="255" r="4" />
+    <text x="250" y="289" text-anchor="middle">vps-cdmx · 187.x.x.x</text>
+  </g>
+  <g class="node" style="--d: 4.2s">
+    <circle class="halo" cx="680" cy="190" r="18" />
+    <circle class="ring" cx="680" cy="190" r="11" />
+    <circle class="core" cx="680" cy="190" r="4" />
+    <text x="680" y="222" text-anchor="middle">cam-hall · rtsp</text>
+  </g>
+</svg>
+
+<style>
+  .constellation {
+    width: min(92vw, 760px);
+    display: block;
+  }
+  .constellation text {
+    font-family: var(--karto-font-body);
+    font-size: 10px;
+    font-weight: 500;
+    fill: rgba(230, 234, 240, 0.55);
+    letter-spacing: 0.04em;
+  }
+
+  .edge {
+    stroke: rgba(230, 234, 240, 0.28);
+    stroke-width: 1;
+    stroke-dasharray: 400;
+    stroke-dashoffset: 400;
+    animation: draw 1.6s ease-out forwards;
+  }
+  .edge:nth-child(2) { animation-delay: 0.2s; }
+  .edge:nth-child(3) { animation-delay: 0.35s; }
+  .edge:nth-child(4) { animation-delay: 0.5s; }
+  .edge:nth-child(5) { animation-delay: 0.65s; }
+  .edge:nth-child(6) { animation-delay: 0.8s; }
+  .edge:nth-child(7) { animation-delay: 0.95s; }
+  @keyframes draw {
+    to { stroke-dashoffset: 0; }
+  }
+
+  /* Cada halo respira con un desfase propio (--d): el mapa se siente vivo. */
+  .halo {
+    fill: rgba(17, 178, 69, 0.12);
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: breathe 6s ease-in-out infinite;
+    animation-delay: var(--d, 0s);
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.18); opacity: 0.65; }
+  }
+  .ring {
+    fill: none;
+    stroke: rgba(230, 234, 240, 0.35);
+    stroke-width: 1;
+  }
+  .core {
+    fill: var(--karto-color-accent);
+  }
+
+  .pulse {
+    fill: var(--karto-color-accent);
+    filter: drop-shadow(0 0 4px var(--karto-color-accent));
+    animation: travel 5s linear infinite;
+  }
+  .pulse-b {
+    animation-delay: 2.5s;
+  }
+  @keyframes travel {
+    0% { offset-distance: 0%; opacity: 0; }
+    8% { opacity: 1; }
+    38% { offset-distance: 100%; opacity: 1; }
+    42% { offset-distance: 100%; opacity: 0; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .edge { animation: none; stroke-dashoffset: 0; }
+    .halo, .pulse { animation: none; }
+    .pulse { opacity: 0; }
+  }
+</style>

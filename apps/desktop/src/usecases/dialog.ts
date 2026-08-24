@@ -1,21 +1,22 @@
 // Casos de uso para elegir rutas de archivo del vault mediante los diálogos nativos.
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { m } from "$paraglide/messages.js";
 
-const FILTERS = [{ name: "Vault de Karto", extensions: ["karto"] }];
+const FILTERS = [{ name: m.dialog_vault_filter(), extensions: ["karto"] }];
 
 export async function pickNewVaultPath(defaultPath?: string): Promise<string | null> {
-  const path = await save({ title: "Crear vault", defaultPath, filters: FILTERS });
+  const path = await save({ title: m.dialog_create_vault(), defaultPath, filters: FILTERS });
   return path ?? null;
 }
 
 export async function pickBackupPath(): Promise<string | null> {
-  const path = await save({ title: "Guardar copia de respaldo cifrada", filters: FILTERS });
+  const path = await save({ title: m.dialog_save_backup(), filters: FILTERS });
   return path ?? null;
 }
 
 export async function pickSubsetExportPath(suggestedName?: string): Promise<string | null> {
   const path = await save({
-    title: "Exportar selección a un vault nuevo",
+    title: m.dialog_export_subset(),
     defaultPath: suggestedName ? `${suggestedName}.karto` : undefined,
     filters: FILTERS,
   });
@@ -24,7 +25,7 @@ export async function pickSubsetExportPath(suggestedName?: string): Promise<stri
 
 export async function pickExistingVaultPath(): Promise<string | null> {
   const path = await open({
-    title: "Abrir vault",
+    title: m.dialog_open_vault(),
     multiple: false,
     directory: false,
     filters: FILTERS,
@@ -37,7 +38,7 @@ export async function pickExportImagePath(
   suggestedName?: string,
 ): Promise<string | null> {
   const path = await save({
-    title: "Exportar diagrama",
+    title: m.flow_export_title(),
     defaultPath: suggestedName ? `${suggestedName}.${format}` : undefined,
     filters: [{ name: format.toUpperCase(), extensions: [format] }],
   });
@@ -46,7 +47,7 @@ export async function pickExportImagePath(
 
 export async function pickSshKeyPath(): Promise<string | null> {
   const path = await open({
-    title: "Elegir llave SSH",
+    title: m.dialog_pick_ssh_key(),
     multiple: false,
     directory: false,
   });

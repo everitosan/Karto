@@ -3,6 +3,7 @@
   import type { VaultInfo } from "$domain/vault";
   import { vaultUseCases } from "$usecases/vault";
   import PasswordField from "$components/PasswordField.svelte";
+  import { m } from "$paraglide/messages.js";
 
   interface Props {
     path: string | null;
@@ -27,7 +28,7 @@
     } catch (e) {
       error =
         e instanceof Error && (e as { kind?: string }).kind === "wrong-password"
-          ? "Contraseña incorrecta."
+          ? m.unlock_wrong_password()
           : e instanceof Error
             ? e.message
             : String(e);
@@ -40,14 +41,14 @@
 
 <main class="unlock">
   <form class="card" onsubmit={(e) => (e.preventDefault(), unlock())}>
-    <h1>Desbloquear</h1>
+    <h1>{m.unlock_title()}</h1>
     <p class="file"><Icon icon={icons.lock} size={16} /> {fileName}</p>
-    <PasswordField label="Contraseña maestra" bind:value={password} autofocus />
+    <PasswordField label={m.auth_password_master()} bind:value={password} autofocus />
     {#if error}<p class="error">{error}</p>{/if}
     <div class="actions">
-      <Button type="button" variant="ghost" onclick={onCancel} disabled={busy}>Volver</Button>
+      <Button type="button" variant="ghost" onclick={onCancel} disabled={busy}>{m.common_back()}</Button>
       <Button type="submit" disabled={busy || password.length === 0}>
-        {busy ? "Desbloqueando…" : "Desbloquear"}
+        {busy ? m.unlock_unlocking() : m.unlock_submit()}
       </Button>
     </div>
   </form>

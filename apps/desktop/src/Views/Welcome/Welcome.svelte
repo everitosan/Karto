@@ -6,6 +6,7 @@
   import { recentsUseCases, type RecentVault } from "$usecases/recents";
   import { pickNewVaultPath, pickExistingVaultPath } from "$usecases/dialog";
   import PasswordField from "$components/PasswordField.svelte";
+  import { m } from "$paraglide/messages.js";
 
   interface Props {
     onReady: (info: VaultInfo) => void;
@@ -38,7 +39,7 @@
   async function createVault() {
     error = null;
     if (!passwordsMatch) {
-      error = "La contraseña debe tener al menos 8 caracteres y coincidir.";
+      error = m.welcome_error_password();
       return;
     }
     const dir = await recentsUseCases.defaultVaultDir().catch(() => "");
@@ -78,7 +79,7 @@
   <div class="card">
     <div class="brand"><Logo variant="full" size={40} /></div>
     <Typography variant="subtitle">
-      Todo tu universo de infraestructura en un solo mapa cifrado.
+      {m.welcome_tagline()}
     </Typography>
 
     {#if mode === "choose"}
@@ -96,8 +97,8 @@
               <button
                 class="forget"
                 type="button"
-                title="Quitar de recientes"
-                aria-label="Quitar de recientes"
+                title={m.welcome_forget_recent()}
+                aria-label={m.welcome_forget_recent()}
                 onclick={() => forgetRecent(recent.path)}
               >
                 ✕
@@ -107,22 +108,22 @@
         </ul>
       {/if}
       <div class="actions">
-        <Button variant="secondary" onclick={openExisting}>Abrir vault existente</Button>
-        <Button onclick={() => (mode = "create")}>Crear vault nuevo</Button>
+        <Button variant="secondary" onclick={openExisting}>{m.welcome_open_existing()}</Button>
+        <Button onclick={() => (mode = "create")}>{m.welcome_create_new()}</Button>
       </div>
     {:else}
       <form onsubmit={(e) => (e.preventDefault(), createVault())}>
-        <PasswordField label="Contraseña maestra" bind:value={password} />
-        <PasswordField label="Confirmar contraseña" bind:value={confirm} />
+        <PasswordField label={m.auth_password_master()} bind:value={password} />
+        <PasswordField label={m.welcome_password_confirm()} bind:value={confirm} />
         <p class="hint">
-          Si la olvidas, los datos son irrecuperables (cifrado real). Haz respaldos.
+          {m.welcome_create_hint()}
         </p>
         {#if error}<p class="error">{error}</p>{/if}
         <div class="actions">
           <Button type="submit" disabled={!passwordsMatch || busy}>
-            {busy ? "Creando…" : "Crear y cifrar"}
+            {busy ? m.welcome_creating() : m.welcome_create_submit()}
           </Button>
-          <Button variant="ghost" onclick={() => (mode = "choose")}>Volver</Button>
+          <Button variant="ghost" onclick={() => (mode = "choose")}>{m.common_back()}</Button>
         </div>
       </form>
     {/if}

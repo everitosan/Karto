@@ -37,6 +37,11 @@ fn vault_create(
 ) -> AppResult<VaultInfo> {
     let info = vault.create(&PathBuf::from(&path), &password)?;
     remember_recent(&path);
+    // Un vault creado localmente es de confianza para sus plantillas (el usuario es
+    // su autor). La marca es machine-local por ruta; no viaja con el `.karto`.
+    if let Ok(store) = open_app_store() {
+        let _ = app_store::trust_vault_templates(&store, &path);
+    }
     Ok(info)
 }
 
@@ -147,9 +152,10 @@ fn ssh_import_parse_file(path: String) -> AppResult<Vec<ImportedHost>> {
 fn ssh_import_hosts(
     vault: tauri::State<Vault>,
     map_id: String,
+    context_id: String,
     hosts: Vec<ImportedHost>,
 ) -> AppResult<Vec<Node>> {
-    vault.with_conn(|c| usecases::ssh_import::import_hosts(c, &map_id, &hosts))
+    vault.with_conn(|c| usecases::ssh_import::import_hosts(c, &map_id, &context_id, &hosts))
 }
 
 // --- Comandos del workspace (carpetas, diagramas, grafo, credenciales) ------
@@ -455,9 +461,37 @@ fn connect_node(
     credential_id: Option<String>,
     context_id: Option<String>,
 ) -> AppResult<()> {
+    // Confianza de plantillas: a nivel de máquina y por ruta del vault (no viaja en
+    // el `.karto`). Un vault importado no está autorizado hasta que el usuario lo
+    // confirme; entonces `connect_node` devuelve `TemplateConfirmationRequired`.
+    let trusted = match vault.status().path {
+        Some(path) => open_app_store()
+            .and_then(|s| app_store::vault_templates_trusted(&s, &path))
+            .unwrap_or(false),
+        None => false,
+    };
     vault.with_conn(|c| {
-        connections::connect_node(c, &node_id, credential_id.as_deref(), context_id.as_deref())
+        connections::connect_node(
+            c,
+            &node_id,
+            credential_id.as_deref(),
+            context_id.as_deref(),
+            trusted,
+        )
     })
+}
+
+/// Autoriza (en esta máquina) la ejecución de las plantillas de conexión que trae
+/// el vault abierto. El frontend lo llama tras mostrar el comando y que el usuario
+/// confirme, en respuesta a un error `TemplateConfirmationRequired`.
+#[tauri::command]
+fn vault_trust_templates(vault: tauri::State<Vault>) -> AppResult<()> {
+    let path = vault
+        .status()
+        .path
+        .ok_or(AppError::NoVaultOpen)?;
+    let store = open_app_store()?;
+    app_store::trust_vault_templates(&store, &path)
 }
 
 /// Abre en el navegador la URL de administración del nodo (`url_admin`/`url`).
@@ -573,7 +607,13 @@ fn template_link_to_vault(vault: tauri::State<Vault>, id: String) -> AppResult<(
     let store = open_app_store()?;
     let tpl = app_store::get_template(&store, &id)?
         .ok_or_else(|| AppError::Other("plantilla no encontrada".into()))?;
-    vault.with_conn(|c| usecases::templates::set_vault_override(c, &tpl.connection, &tpl.command))
+    vault.with_conn(|c| usecases::templates::set_vault_override(c, &tpl.connection, &tpl.command))?;
+    // Ligar una plantilla es una acción local deliberada del usuario → confía en las
+    // plantillas de este vault en esta máquina (así el connect no pide confirmación).
+    if let Some(path) = vault.status().path {
+        let _ = app_store::trust_vault_templates(&store, &path);
+    }
+    Ok(())
 }
 
 /// Lista los overrides de plantilla ligados en el vault abierto.
@@ -814,6 +854,7 @@ fn default_vault_dir(app: tauri::AppHandle) -> AppResult<String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_os::init())
         .setup(|app| {
             app.manage(VaultService::new(SqlcipherStore::new()));
             // Aplica el nivel de log guardado (machine-level) antes de operar; si
@@ -904,6 +945,7 @@ pub fn run() {
             credential_reveal,
             credential_delete,
             connect_node,
+            vault_trust_templates,
             open_node_url,
             open_external_url,
             ssh_provision_key

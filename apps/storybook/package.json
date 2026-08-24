@@ -2,6 +2,7 @@
   "name": "@karto/storybook",
   "version": "0.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "storybook dev -p 6006 --no-open",

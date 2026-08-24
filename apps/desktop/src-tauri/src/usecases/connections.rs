@@ -203,13 +203,52 @@ pub fn ssh_facts_line(req: &ConnectionRequest, control_path: &str, facts_file: &
     )
 }
 
+/// Directivas SSH que pueden ejecutar comandos locales al conectar. Se rechazan
+/// porque un vault compartido/importado podría traerlas en las opciones de una
+/// credencial y lograr ejecución de código en la máquina de quien conecta.
+const DANGEROUS_SSH_DIRECTIVES: &[&str] = &[
+    "proxycommand",
+    "localcommand",
+    "permitlocalcommand",
+    "knownhostscommand",
+    "match", // `Match exec <cmd>` ejecuta un comando local.
+];
+
+/// ¿La línea de opción SSH invoca una directiva capaz de lanzar procesos locales?
+/// Normaliza el nombre de la directiva (primer token antes de `=` o espacio, en
+/// minúsculas) y lo compara con la lista negra. Blocklist en vez de allowlist para
+/// no romper opciones legítimas comunes (`ServerAliveInterval`, `ProxyJump`…).
+pub fn is_dangerous_ssh_option(opt: &str) -> bool {
+    let directive = opt
+        .trim()
+        .split(|c: char| c == '=' || c.is_whitespace())
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    DANGEROUS_SSH_DIRECTIVES.contains(&directive.as_str())
+}
+
 /// Normaliza el texto libre de opciones SSH: una opción por línea, recortando
-/// espacios y descartando líneas vacías o comentarios (`#`).
+/// espacios y descartando líneas vacías o comentarios (`#`). Además **filtra** las
+/// directivas peligrosas (`is_dangerous_ssh_option`), registrando cada descarte en
+/// el log de soporte para que el usuario entienda por qué su opción no se aplicó.
 pub fn parse_ssh_options(raw: Option<&str>) -> Vec<String> {
     raw.map(|text| {
         text.lines()
             .map(str::trim)
             .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .filter(|l| {
+                if is_dangerous_ssh_option(l) {
+                    crate::usecases::diagnostics::warn(
+                        "connection",
+                        "ssh_option_blocked",
+                        &[("directive", l.split(|c: char| c == '=' || c.is_whitespace()).next().unwrap_or(""))],
+                    );
+                    false
+                } else {
+                    true
+                }
+            })
             .map(str::to_string)
             .collect()
     })
@@ -398,14 +437,37 @@ fn map_cred_row(r: &rusqlite::Row) -> rusqlite::Result<CredRow> {
 
 /// Escribe la llave privada a disco con permisos 0600 si el archivo aún no
 /// existe. Se usa para materializar una llave guardada en el vault al abrir el
-/// vault en otro equipo. Crea el directorio padre si hace falta.
+/// vault en otro equipo. Crea el directorio padre (0700 en Unix) si hace falta.
+///
+/// Si el archivo destino **ya existe**, no lo sobrescribe, pero en Unix verifica
+/// que sea seguro reusarlo: modo exactamente 0600 (sin permisos para grupo/otros).
+/// Si es más permisivo, aborta con un error en vez de conectar con una llave que
+/// podría haber sido leída o manipulada por otro usuario.
 pub fn materialize_key(key_path: &str, private_key: &str) -> AppResult<()> {
     let path = std::path::Path::new(key_path);
     if path.exists() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(path)?.permissions().mode() & 0o777;
+            if mode & 0o077 != 0 {
+                return Err(AppError::Other(format!(
+                    "la llave existente {key_path} tiene permisos {mode:o} (inseguros); \
+                     debe ser 0600. Corrígelos o bórrala para regenerarla"
+                )));
+            }
+        }
         return Ok(());
     }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            // Directorio privado del usuario (700): las llaves en claro no deben
+            // quedar en un directorio legible por grupo/otros.
+            let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+        }
     }
     std::fs::write(path, private_key)?;
     #[cfg(unix)]
@@ -573,6 +635,7 @@ pub fn connect_node(
     node_id: &str,
     credential_id: Option<&str>,
     context_id: Option<&str>,
+    templates_trusted: bool,
 ) -> AppResult<()> {
     // Credenciales de BD: abren el cliente interactivo (otra tubería, no SSH/URL).
     if load_credential(conn, node_id, credential_id)?.kind == "db" {
@@ -586,6 +649,12 @@ pub fn connect_node(
     // podría reestructurar el comando de formas incompatibles con el multiplexado).
     if req.kind == ConnectionKind::Ssh && os == Os::Linux {
         if let Some(cmd) = crate::usecases::templates::vault_override(conn, "ssh", os.as_key())? {
+            // Una plantilla embebida ejecuta shell arbitrario. Si el vault no está
+            // marcado como de confianza en esta máquina (p. ej. importado de un
+            // tercero), no la ejecutamos en silencio: pedimos confirmación al usuario.
+            if !templates_trusted {
+                return Err(AppError::TemplateConfirmationRequired(cmd));
+            }
             let inner = crate::usecases::templates::render(&cmd, &req);
             if inner.is_empty() {
                 return Err(AppError::Other(
@@ -745,6 +814,55 @@ mod tests {
         );
         assert!(parse_ssh_options(None).is_empty());
         assert!(parse_ssh_options(Some("   \n # x")).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn materialize_key_writes_0600_in_0700_dir_and_rejects_insecure_existing() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = std::env::temp_dir().join(format!("karto-matkey-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let dir = base.join("keys");
+        let path = dir.join("id_ed25519");
+        let path_str = path.to_string_lossy().to_string();
+
+        // Materializa: crea dir 0700 y archivo 0600.
+        materialize_key(&path_str, "PRIVATE").unwrap();
+        assert_eq!(std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777, 0o700);
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        // Reusar un archivo ya seguro no falla.
+        materialize_key(&path_str, "PRIVATE").unwrap();
+
+        // Un archivo existente con permisos laxos se rechaza.
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(materialize_key(&path_str, "PRIVATE").is_err());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn dangerous_ssh_options_are_detected() {
+        // Directivas que ejecutan comandos locales (mayúsculas/espacios/`=` mezclados).
+        assert!(is_dangerous_ssh_option("ProxyCommand=sh -c evil"));
+        assert!(is_dangerous_ssh_option("proxycommand nc %h %p"));
+        assert!(is_dangerous_ssh_option("LocalCommand touch /tmp/pwned"));
+        assert!(is_dangerous_ssh_option("PermitLocalCommand=yes"));
+        assert!(is_dangerous_ssh_option("KnownHostsCommand /x"));
+        assert!(is_dangerous_ssh_option("Match exec \"/x\""));
+        // Opciones legítimas: no se marcan.
+        assert!(!is_dangerous_ssh_option("ServerAliveInterval=60"));
+        assert!(!is_dangerous_ssh_option("ProxyJump bastion"));
+        assert!(!is_dangerous_ssh_option("StrictHostKeyChecking=accept-new"));
+        assert!(!is_dangerous_ssh_option("ConnectTimeout 10"));
+    }
+
+    #[test]
+    fn parse_ssh_options_filters_dangerous_directives() {
+        let raw = "ServerAliveInterval=60\nProxyCommand=sh -c evil\nProxyJump bastion\nLocalCommand x";
+        assert_eq!(
+            parse_ssh_options(Some(raw)),
+            vec!["ServerAliveInterval=60", "ProxyJump bastion"]
+        );
     }
 
     #[test]

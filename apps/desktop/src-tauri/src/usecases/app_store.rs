@@ -236,6 +236,28 @@ pub fn set_config(conn: &Connection, key: &str, value: &str) -> AppResult<()> {
     Ok(())
 }
 
+// --- Confianza de plantillas por vault (a nivel de máquina) ---
+//
+// Marca si el usuario ha autorizado ejecutar las plantillas de conexión que trae
+// un `.karto` concreto. Vive aquí (por ruta, sin cifrar) y **no** dentro del vault:
+// si viviera en el vault, `vault_export` (VACUUM INTO copia todo) arrastraría la
+// confianza al archivo compartido y anularía el gate para el receptor.
+
+/// Clave de config para la confianza de plantillas de un vault en esta máquina.
+fn trust_key(vault_path: &str) -> String {
+    format!("templatesTrusted:{vault_path}")
+}
+
+/// ¿El usuario autorizó las plantillas embebidas de este vault en esta máquina?
+pub fn vault_templates_trusted(conn: &Connection, vault_path: &str) -> AppResult<bool> {
+    Ok(get_config(conn, &trust_key(vault_path))?.as_deref() == Some("1"))
+}
+
+/// Marca las plantillas embebidas de este vault como de confianza en esta máquina.
+pub fn trust_vault_templates(conn: &Connection, vault_path: &str) -> AppResult<()> {
+    set_config(conn, &trust_key(vault_path), "1")
+}
+
 /// Epoch actual en milisegundos (impuro; la capa adaptadora lo pasa a `remember`).
 pub fn now_millis() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -506,6 +528,16 @@ mod tests {
         let c = Connection::open_in_memory().unwrap();
         init(&c).unwrap();
         c
+    }
+
+    #[test]
+    fn vault_template_trust_is_per_path_and_defaults_false() {
+        let c = conn();
+        assert!(!vault_templates_trusted(&c, "/a.karto").unwrap());
+        trust_vault_templates(&c, "/a.karto").unwrap();
+        assert!(vault_templates_trusted(&c, "/a.karto").unwrap());
+        // La confianza es por ruta: otro vault no queda autorizado.
+        assert!(!vault_templates_trusted(&c, "/b.karto").unwrap());
     }
 
     #[test]

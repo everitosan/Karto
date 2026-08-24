@@ -10,12 +10,14 @@
     shortcuts: Shortcut[];
   }
 
+  import { m } from "$paraglide/messages.js";
+
   const SECTIONS: SectionShortcuts[] = [
     {
-      section: "Diagrama",
+      section: m.shortcut_section_diagram(),
       shortcuts: [
-        { keys: ["Supr", "Retroceso"], action: "Eliminar el nodo o la conexión seleccionada" },
-        { keys: ["Esc"], action: "Cerrar el menú contextual" },
+        { keys: [m.shortcut_key_delete(), m.shortcut_key_backspace()], action: m.shortcut_delete_action() },
+        { keys: ["Esc"], action: m.shortcut_esc_action() },
       ],
     },
   ];
@@ -30,7 +32,7 @@
           <li class="row">
             <span class="keys">
               {#each sc.keys as k, i (k)}
-                {#if i > 0}<span class="sep">o</span>{/if}
+                {#if i > 0}<span class="sep">{m.common_or()}</span>{/if}
                 <kbd>{k}</kbd>
               {/each}
             </span>

@@ -6,6 +6,7 @@
   import type { Folder, InfraMap } from "$domain/infra";
   import { workspaceUseCases as uc } from "$usecases/workspace";
   import SshImportModal from "./SshImportModal.svelte";
+  import { m } from "$paraglide/messages.js";
 
   interface Props {
     selectedMapId: string | null;
@@ -133,29 +134,29 @@
 
   async function addFolder(parentId: string | null) {
     if (parentId) openFolder(parentId); // que el hijo nuevo sea visible
-    const f = await uc.createFolder("Nueva carpeta", parentId);
+    const f = await uc.createFolder(m.sidebar_new_folder(), parentId);
     await reload();
     startEdit(f.id, "folder", f.name);
   }
 
   async function addMap(folderId: string | null) {
     if (folderId) openFolder(folderId);
-    const m = await uc.createMap("Nuevo diagrama", folderId);
+    const map = await uc.createMap(m.sidebar_new_map(), folderId);
     await reload();
-    selectedMapId = m.id;
-    startEdit(m.id, "map", m.name);
+    selectedMapId = map.id;
+    startEdit(map.id, "map", map.name);
   }
 
   async function removeFolder(f: Folder) {
-    if (!confirm(`¿Eliminar la carpeta "${f.name}" y todo su contenido?`)) return;
+    if (!confirm(m.sidebar_delete_folder_confirm({ name: f.name }))) return;
     await uc.deleteFolder(f.id);
     await reload();
   }
 
-  async function removeMap(m: InfraMap) {
-    if (!confirm(`¿Eliminar el diagrama "${m.name}"?`)) return;
-    await uc.deleteMap(m.id);
-    if (selectedMapId === m.id) selectedMapId = null;
+  async function removeMap(map: InfraMap) {
+    if (!confirm(m.sidebar_delete_map_confirm({ name: map.name }))) return;
+    await uc.deleteMap(map.id);
+    if (selectedMapId === map.id) selectedMapId = null;
     await reload();
   }
 
@@ -315,17 +316,17 @@
 
 <aside class="sidebar">
   <div class="head">
-    <span>Diagramas</span>
+    <span>{m.nav_diagrams()}</span>
     <div class="head-actions">
-      <button title="Nueva carpeta" onclick={() => addFolder(null)}>
+      <button title={m.sidebar_new_folder()} onclick={() => addFolder(null)}>
         <Icon icon={icons.folder} size={15} />
         <Icon icon={icons.add} size={11} />
       </button>
-      <button title="Nuevo diagrama" onclick={() => addMap(null)}>
+      <button title={m.sidebar_new_map()} onclick={() => addMap(null)}>
         <Icon icon={icons.diagram} size={15} />
         <Icon icon={icons.add} size={11} />
       </button>
-      <button title="Importar desde ~/.ssh/config" onclick={() => (importOpen = true)}>
+      <button title={m.sidebar_import_ssh()} onclick={() => (importOpen = true)}>
         <Icon icon={icons.terminal} size={15} />
         <Icon icon={icons.add} size={11} />
       </button>
@@ -343,8 +344,7 @@
   >
     {#if loaded && folders.length === 0 && maps.length === 0}
       <p class="empty">
-        Sin diagramas todavía. Crea una carpeta o un diagrama con los botones de
-        arriba.
+        {m.sidebar_empty()}
       </p>
     {/if}
 
@@ -385,7 +385,7 @@
       <button
         class="chevron"
         class:open={isOpen(folder.id)}
-        title={isOpen(folder.id) ? "Colapsar" : "Expandir"}
+        title={isOpen(folder.id) ? m.common_collapse() : m.common_expand()}
         aria-expanded={isOpen(folder.id)}
         onclick={() => toggleFolder(folder.id)}
       >
@@ -416,16 +416,16 @@
         {folder.name}
       </button>
       <div class="actions">
-        <button title="Subcarpeta" onclick={() => addFolder(folder.id)}>
+        <button title={m.sidebar_subfolder()} onclick={() => addFolder(folder.id)}>
           <Icon icon={icons.folder} size={13} />
         </button>
-        <button title="Nuevo diagrama aquí" onclick={() => addMap(folder.id)}>
+        <button title={m.sidebar_new_map_here()} onclick={() => addMap(folder.id)}>
           <Icon icon={icons.add} size={13} />
         </button>
-        <button title="Renombrar" onclick={() => startEdit(folder.id, "folder", folder.name)}>
+        <button title={m.common_rename()} onclick={() => startEdit(folder.id, "folder", folder.name)}>
           <Icon icon={icons.edit} size={13} />
         </button>
-        <button title="Eliminar" onclick={() => removeFolder(folder)}>
+        <button title={m.common_delete()} onclick={() => removeFolder(folder)}>
           <Icon icon={icons.delete} size={13} />
         </button>
       </div>
@@ -476,10 +476,10 @@
         {map.name}
       </button>
       <div class="actions">
-        <button title="Renombrar" onclick={() => startEdit(map.id, "map", map.name)}>
+        <button title={m.common_rename()} onclick={() => startEdit(map.id, "map", map.name)}>
           <Icon icon={icons.edit} size={13} />
         </button>
-        <button title="Eliminar" onclick={() => removeMap(map)}>
+        <button title={m.common_delete()} onclick={() => removeMap(map)}>
           <Icon icon={icons.delete} size={13} />
         </button>
       </div>

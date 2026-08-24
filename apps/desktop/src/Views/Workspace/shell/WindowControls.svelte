@@ -7,6 +7,7 @@
   // este componente se parametrizará por SO ahí.
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { windowState } from "$components/windowState.svelte";
+  import { m } from "$paraglide/messages.js";
 
   const win = getCurrentWindow();
   const maximized = $derived(windowState.maximized);
@@ -17,7 +18,7 @@
 </script>
 
 <div class="controls">
-  <button class="ctl" title="Minimizar" aria-label="Minimizar" onclick={minimize}>
+  <button class="ctl" title={m.window_minimize()} aria-label={m.window_minimize()} onclick={minimize}>
     <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
       <line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" stroke-width="1" />
     </svg>
@@ -25,8 +26,8 @@
 
   <button
     class="ctl"
-    title={maximized ? "Restaurar" : "Maximizar"}
-    aria-label={maximized ? "Restaurar" : "Maximizar"}
+    title={maximized ? m.window_restore() : m.window_maximize()}
+    aria-label={maximized ? m.window_restore() : m.window_maximize()}
     onclick={toggleMaximize}
   >
     {#if maximized}
@@ -41,7 +42,7 @@
     {/if}
   </button>
 
-  <button class="ctl close" title="Cerrar" aria-label="Cerrar" onclick={close}>
+  <button class="ctl close" title={m.common_close()} aria-label={m.common_close()} onclick={close}>
     <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
       <line x1="2.5" y1="2.5" x2="9.5" y2="9.5" stroke="currentColor" stroke-width="1" />
       <line x1="9.5" y1="2.5" x2="2.5" y2="9.5" stroke="currentColor" stroke-width="1" />

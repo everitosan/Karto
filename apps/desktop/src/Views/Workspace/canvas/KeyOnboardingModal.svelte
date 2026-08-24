@@ -4,6 +4,7 @@
   // primero. Lee/actualiza el estado compartido en `connectFlow.svelte.ts`.
   import { Modal, Button, Checkbox } from "@karto/ui";
   import { onboarding, confirmOnboarding, cancelOnboarding } from "./connectFlow.svelte";
+  import { m } from "$paraglide/messages.js";
 
   let registerKey = $state(true);
   let setDefaultKey = $state(true);
@@ -32,18 +33,16 @@
   }
 </script>
 
-<Modal {open} title="Conexión SSH por contraseña" width="30rem" onClose={cancelOnboarding}>
+<Modal {open} title={m.keyob_title()} width="30rem" onClose={cancelOnboarding}>
   <p class="intro">
-    Esta credencial{host ? ` (${host})` : ""} se conecta por contraseña. Puedes
-    cambiar a <strong>acceso por llave</strong>, más seguro: tecleas la contraseña
-    una sola vez, se copia la llave al servidor y la conexión continúa con la llave.
+    {m.keyob_intro_before({ host: host ? ` (${host})` : "" })}<strong>{m.keyob_intro_strong()}</strong>{m.keyob_intro_after()}
   </p>
 
   <div class="check">
     <Checkbox bind:checked={registerKey}>
       <span class="label">
-        <strong>Registrar una llave</strong> para conexiones seguras
-        <small>Genera una llave ed25519 y la copia al servidor (ssh-copy-id).</small>
+        <strong>{m.keyob_register_title()}</strong>{m.keyob_register_rest()}
+        <small>{m.keyob_register_hint()}</small>
       </span>
     </Checkbox>
   </div>
@@ -51,8 +50,8 @@
   <div class="check">
     <Checkbox bind:checked={setDefaultKey} disabled={!registerKey}>
       <span class="label">
-        Usar la llave como <strong>conexión predeterminada</strong>
-        <small>Las próximas conexiones usarán la llave (la contraseña queda de respaldo).</small>
+        {m.keyob_default_before()}<strong>{m.keyob_default_strong()}</strong>
+        <small>{m.keyob_default_hint()}</small>
       </span>
     </Checkbox>
   </div>
@@ -60,16 +59,16 @@
   <div class="check">
     <Checkbox bind:checked={storeInVault} disabled={!registerKey}>
       <span class="label">
-        Guardar la llave <strong>en el vault del diagrama</strong>
-        <small>La llave privada viaja cifrada con el .karto (portable entre equipos).</small>
+        {m.keyob_store_before()}<strong>{m.keyob_store_strong()}</strong>
+        <small>{m.keyob_store_hint()}</small>
       </span>
     </Checkbox>
   </div>
 
   {#snippet footer()}
-    <Button variant="ghost" onclick={cancelOnboarding} disabled={onboarding.busy}>Cancelar</Button>
+    <Button variant="ghost" onclick={cancelOnboarding} disabled={onboarding.busy}>{m.common_cancel()}</Button>
     <Button onclick={proceed} disabled={onboarding.busy}>
-      {onboarding.busy ? "Procesando…" : registerKey ? "Configurar y conectar" : "Conectar con contraseña"}
+      {onboarding.busy ? m.keyob_processing() : registerKey ? m.keyob_setup_connect() : m.keyob_connect_password()}
     </Button>
   {/snippet}
 </Modal>

@@ -4,6 +4,7 @@
   import { Modal, Button, Checkbox, FilePicker } from "@karto/ui";
   import type { CredentialKind } from "$domain/infra";
   import { pickSshKeyPath } from "$usecases/dialog";
+  import { m } from "$paraglide/messages.js";
 
   export interface CredentialDraft {
     id: string | null;
@@ -52,6 +53,8 @@
   const editing = $derived(initial.id !== null);
   // SSH/VNC/RDP/DB usan puerto y credenciales; web usa usuario/clave del panel.
   const showKeyPath = $derived(form.kind === "ssh");
+  // Web abre la URL del nodo: el puerto de la credencial no se usa (va en la URL).
+  const showPort = $derived(form.kind !== "web");
 
   async function save() {
     saving = true;
@@ -74,62 +77,64 @@
   }
 </script>
 
-<Modal {open} title={editing ? "Editar credencial" : "Agregar credencial"} {onClose}>
+<Modal {open} title={editing ? m.cred_edit_title() : m.cred_add_title()} {onClose}>
   <div class="form">
     <label class="field span-2">
-      <span>Tipo</span>
+      <span>{m.cred_type()}</span>
       <select bind:value={form.kind}>
         {#each credKinds as k (k)}<option value={k}>{k.toUpperCase()}</option>{/each}
       </select>
     </label>
 
-    <label class="field">
-      <span>Usuario</span>
-      <input placeholder="usuario" bind:value={form.username} />
+    <label class="field" class:span-2={!showPort}>
+      <span>{m.cred_user()}</span>
+      <input placeholder={m.cred_user_placeholder()} bind:value={form.username} />
     </label>
 
-    <label class="field">
-      <span>Puerto</span>
-      <input placeholder="p. ej. 22" inputmode="numeric" bind:value={form.port} />
-    </label>
+    {#if showPort}
+      <label class="field">
+        <span>{m.cred_port()}</span>
+        <input placeholder={m.cred_port_placeholder()} inputmode="numeric" bind:value={form.port} />
+      </label>
+    {/if}
 
     <label class="field" class:span-2={!showKeyPath}>
-      <span>Contraseña</span>
-      <input placeholder="contraseña / passphrase" type="password" bind:value={form.secret} />
+      <span>{m.common_password()}</span>
+      <input placeholder={m.cred_secret_placeholder()} type="password" bind:value={form.secret} />
     </label>
 
     {#if showKeyPath}
       <label class="field">
-        <span>Ruta de la llave</span>
+        <span>{m.cred_key_path()}</span>
         <FilePicker
           bind:value={form.keyPath}
-          placeholder="~/.ssh/id_ed25519 (opcional)"
+          placeholder={m.cred_key_placeholder()}
           onBrowse={pickSshKeyPath}
         />
       </label>
 
       <label class="field span-2">
-        <span>Opciones SSH para la conexión</span>
+        <span>{m.cred_ssh_options()}</span>
         <textarea
           rows="3"
-          placeholder={"Una por línea, p. ej.:\nServerAliveInterval=60\nConnectTimeout=10\nProxyJump bastion"}
+          placeholder={m.cred_ssh_options_placeholder()}
           bind:value={form.options}
           use:autosize={form.options}
         ></textarea>
-        <small class="hint">Cada línea se pasa como <code>-o &lt;opción&gt;</code> a ssh.</small>
+        <small class="hint">{@html m.cred_ssh_options_hint()}</small>
       </label>
     {/if}
 
     <div class="checkbox span-2">
-      <Checkbox bind:checked={form.isDefault}>Usar como predeterminada</Checkbox>
+      <Checkbox bind:checked={form.isDefault}>{m.cred_use_default()}</Checkbox>
     </div>
   </div>
 
   {#snippet footer()}
     <div class="footer-actions">
-      <Button variant="secondary" onclick={onClose}>Cancelar</Button>
+      <Button variant="secondary" onclick={onClose}>{m.common_cancel()}</Button>
       <Button variant="primary" disabled={saving} onclick={save}>
-        {saving ? "Guardando…" : "Aceptar"}
+        {saving ? m.common_saving() : m.common_accept()}
       </Button>
     </div>
   {/snippet}
@@ -203,7 +208,7 @@
     font-size: 0.7rem;
     opacity: 0.6;
   }
-  .hint code {
+  .hint :global(code) {
     font-family: var(--karto-font-mono, monospace);
   }
   .checkbox {

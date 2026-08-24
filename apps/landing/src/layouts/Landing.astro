@@ -1,0 +1,661 @@
+---
+import "@karto/ui/styles.css";
+import { Button, Logo, Icon } from "@karto/ui";
+import Starfield from "../components/Starfield.astro";
+import Reticle from "../components/Reticle.astro";
+import Constellation from "../components/Constellation.astro";
+import type { Content, Locale } from "../i18n";
+
+interface Props {
+  t: Content;
+}
+const { t } = Astro.props;
+const locale = t.lang as Locale;
+
+// Umami self-hosted. Se cargan por variable de entorno (prefijo PUBLIC_ para
+// que Astro las exponga al cliente). Si faltan, no se inyecta el script y todo
+// el seguimiento queda como no-op: la landing funciona igual sin analítica.
+const umamiSrc = import.meta.env.PUBLIC_UMAMI_SRC;
+const umamiId = import.meta.env.PUBLIC_UMAMI_WEBSITE_ID;
+// Grabador de sesión (opcional): mismo website-id que la analítica.
+const umamiRecorderSrc = import.meta.env.PUBLIC_UMAMI_RECORDER_SRC;
+
+// Claves estables de FAQ, independientes del idioma. El orden de t.faq es el
+// mismo en ES y EN, así que el índice mapea a la misma objeción y se agrega
+// bien en el panel (si cambias el orden de las preguntas, ajusta esto).
+const faqKeys = ["password", "telemetry", "platforms", "license"];
+---
+
+<html lang={t.lang} dir={t.dir}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{t.meta.title}</title>
+    <meta name="description" content={t.meta.description} />
+    <meta property="og:title" content={t.meta.ogTitle} />
+    <meta property="og:description" content={t.meta.ogDescription} />
+    <link rel="alternate" hreflang="es" href="/" />
+    <link rel="alternate" hreflang="en" href="/en/" />
+    <link rel="alternate" hreflang="x-default" href="/" />
+    <meta name="karto:locale" content={locale} />
+    {umamiSrc && umamiId && (
+      <script is:inline defer src={umamiSrc} data-website-id={umamiId}></script>
+    )}
+    {umamiRecorderSrc && umamiId && (
+      <script is:inline defer src={umamiRecorderSrc} data-website-id={umamiId}></script>
+    )}
+  </head>
+  <body>
+    <Starfield />
+
+    <!-- Acto 1 · El cielo -->
+    <section class="hero">
+      <Reticle />
+      <div class="hero-inner" data-reveal>
+        <span class="badge">{t.badge}</span>
+        <Logo client:load variant="full" size={64} />
+        <h1>{t.hero.titleA}<br /><em>{t.hero.titleEm}</em></h1>
+        <p class="sub">
+          {t.hero.sub}
+          <strong>{t.hero.subStrong}</strong>
+        </p>
+        <div class="ctas">
+          <span class="track" data-track="download_hero">
+            <Button client:load variant="primary">{t.hero.ctaPrimary}</Button>
+          </span>
+          <a class="btn-ghost" href="#navegacion" data-track="demo_scroll">{t.hero.ctaGhost}</a>
+        </div>
+        <Constellation />
+      </div>
+    </section>
+
+    <main>
+      <!-- Acto 1.5 · Hechos duros -->
+      <section class="facts" data-reveal>
+        {t.facts.map((f) => (
+          <span><b>{f.n}</b> {f.label}</span>
+        ))}
+      </section>
+
+      <!-- Acto 2 · Cartografía -->
+      <section class="act" id="cartografia">
+        <header data-reveal>
+          <p class="act-label">{t.mapAct.label}</p>
+          <h2>{t.mapAct.title}</h2>
+          <p class="act-sub">{t.mapAct.sub}</p>
+        </header>
+        <div class="cards" data-reveal>
+          {t.mapFeatures.map((f) => (
+            <article class="card">
+              <div class="card-head">
+                <span class="glyph"><Icon client:visible icon={f.icon} size={26} color="var(--karto-color-accent)" /></span>
+                <span class="card-id">{f.id}</span>
+              </div>
+              <h3>{f.title}</h3>
+              <p>{f.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <!-- Acto 3 · Navegación -->
+      <section class="act" id="navegacion">
+        <header data-reveal data-scroll="scroll_navegacion">
+          <p class="act-label">{t.navAct.label}</p>
+          <h2>{t.navAct.title}</h2>
+          <p class="act-sub">{t.navAct.sub}</p>
+        </header>
+
+        <!-- La constelación pasa de "dibujada" a "activa" al entrar en pantalla -->
+        <figure class="ignite" data-reveal data-ignite aria-label={t.igniteAria}>
+          <svg viewBox="0 0 640 200">
+            <line class="i-edge" x1="80" y1="130" x2="220" y2="60" />
+            <line class="i-edge" x1="220" y1="60" x2="380" y2="120" />
+            <line class="i-edge" x1="380" y1="120" x2="540" y2="55" />
+            <line class="i-edge" x1="220" y1="60" x2="330" y2="170" />
+            <g class="i-node" style="--i: 0">
+              <circle class="i-ring" cx="80" cy="130" r="13" /><circle class="i-core" cx="80" cy="130" r="4.5" />
+              <text x="80" y="163" text-anchor="middle">fw-edge</text>
+            </g>
+            <g class="i-node" style="--i: 1">
+              <circle class="i-ring" cx="220" cy="60" r="15" /><circle class="i-core" cx="220" cy="60" r="5" />
+              <text x="220" y="33" text-anchor="middle">rt-core</text>
+            </g>
+            <g class="i-node" style="--i: 2">
+              <circle class="i-ring" cx="380" cy="120" r="14" /><circle class="i-core" cx="380" cy="120" r="5" />
+              <text x="380" y="153" text-anchor="middle">web-01</text>
+            </g>
+            <g class="i-node" style="--i: 3">
+              <circle class="i-ring" cx="540" cy="55" r="13" /><circle class="i-core" cx="540" cy="55" r="4.5" />
+              <text x="540" y="88" text-anchor="middle">pg-main</text>
+            </g>
+            <g class="i-node" style="--i: 4">
+              <circle class="i-ring" cx="330" cy="170" r="12" /><circle class="i-core" cx="330" cy="170" r="4" />
+              <text x="330" y="196" text-anchor="middle">nas-lab</text>
+            </g>
+          </svg>
+          <figcaption>{t.igniteCaption}</figcaption>
+        </figure>
+
+        <div class="cards" data-reveal>
+          {t.actionFeatures.map((f) => (
+            <article class="card">
+              <div class="card-head">
+                <span class="glyph"><Icon client:visible icon={f.icon} size={26} color="var(--karto-color-accent)" /></span>
+                <span class="card-id">{f.id}</span>
+              </div>
+              <h3>{f.title}</h3>
+              <p>{f.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <!-- Acto 4 · El observatorio -->
+      <section class="act" id="observatorio">
+        <header data-reveal data-scroll="scroll_observatorio">
+          <p class="act-label">{t.secAct.label}</p>
+          <h2>{t.secAct.title}</h2>
+          <p class="act-sub">{t.secAct.sub}</p>
+        </header>
+        <div class="cards cards-2" data-reveal>
+          {t.security.map((s) => (
+            <article class="card">
+              <div class="card-head">
+                <span class="glyph"><Icon client:visible icon={s.icon} size={26} color="var(--karto-color-accent)" /></span>
+              </div>
+              <h3>{s.title}</h3>
+              <p>{s.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <!-- Acto 5 · Para quién -->
+      <section class="act" id="para-quien">
+        <header data-reveal>
+          <p class="act-label">{t.audAct.label}</p>
+          <h2>{t.audAct.title}</h2>
+        </header>
+        <div class="cards" data-reveal>
+          {t.audiences.map((a) => (
+            <article class="card audience">
+              <p class="audience-label">{a.label}</p>
+              <h3>{a.title}</h3>
+              <p>{a.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <!-- Acto 6 · Despega -->
+      <section class="act launch" id="descargar">
+        <div class="launch-box" data-reveal data-scroll="scroll_descargar">
+          <h2>{t.launch.title}</h2>
+          <p class="act-sub">
+            {t.launch.subA} <code>.karto</code> {t.launch.subB}
+          </p>
+          <div class="ctas">
+            <span class="track" data-track="download_final">
+              <Button client:load variant="primary">{t.launch.cta}</Button>
+            </span>
+          </div>
+          <p class="launch-note">{t.launch.note}</p>
+        </div>
+
+        <div class="faq" data-reveal>
+          {t.faq.map((item, i) => (
+            <details data-faq={faqKeys[i] ?? String(i)}>
+              <summary>{item.q}</summary>
+              <p>{item.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+    </main>
+
+    <footer data-reveal>
+      <p>{t.footer.madeIn} <a href="https://evesan.rocks/">evesan</a></p>
+      <nav>
+        <a class="lang-switch" href={t.altHref} data-set-locale={t.altLocale} data-track="lang_switch">{t.altLabel}</a>
+        <a href="https://github.com/everitosan/karto" data-track="github_click">GitHub</a>
+        <a href="https://www.linkedin.com/in/everitosan/" data-track="linkedin_click">LinkedIn</a>
+        <a href="https://ko-fi.com/evesan" data-track="outbound_kofi">Ko-fi</a>
+      </nav>
+    </footer>
+
+    <script>
+      // Detección de idioma del navegador y conmutador manual.
+      // Estático (sin SSR): la redirección se hace en cliente. Solo se
+      // redirige la PRIMERA visita y si el usuario no eligió idioma a mano.
+      const KEY = "karto-locale";
+      const page = document
+        .querySelector('meta[name="karto:locale"]')
+        ?.getAttribute("content") as "es" | "en" | null;
+
+      // El conmutador guarda la elección explícita del usuario.
+      document.querySelectorAll<HTMLAnchorElement>("[data-set-locale]").forEach((el) => {
+        el.addEventListener("click", () => {
+          try {
+            localStorage.setItem(KEY, el.dataset.setLocale!);
+          } catch {}
+        });
+      });
+
+      // Auto-redirección: solo si no hay preferencia guardada.
+      let saved: string | null = null;
+      try {
+        saved = localStorage.getItem(KEY);
+      } catch {}
+      if (!saved && page) {
+        const prefersEn = (navigator.language || "").toLowerCase().startsWith("en");
+        const wanted = prefersEn ? "en" : "es";
+        if (wanted !== page) {
+          location.replace(wanted === "en" ? "/en/" : "/");
+        }
+      }
+    </script>
+
+    <script>
+      // Umami: seguimiento de eventos de intención. Usamos umami.track() manual
+      // (en vez de data-umami-event) porque los CTAs de descarga son el componente
+      // Button, cuyo nodo no reenvía atributos data-*. Si Umami no cargó (script
+      // ausente, bloqueado o Do-Not-Track), track() es un no-op silencioso.
+      const track = (name: string, data?: Record<string, unknown>) => {
+        (window as unknown as { umami?: { track?: (n: string, d?: unknown) => void } })
+          .umami?.track?.(name, data);
+      };
+
+      // Clicks: cualquier elemento (o su ancestro) con [data-track]. Delegado en
+      // el documento, así funciona aunque el nodo real esté dentro de un componente.
+      document.addEventListener("click", (e) => {
+        const target = e.target as HTMLElement | null;
+        const el = target?.closest("[data-track]") as HTMLElement | null;
+        if (el?.dataset.track) track(el.dataset.track);
+      });
+
+      // FAQ: cuenta solo la apertura (no el cierre), con una clave estable e
+      // independiente del idioma → agrega bien qué objeción pesa más.
+      document.querySelectorAll<HTMLDetailsElement>("details[data-faq]").forEach((d) => {
+        d.addEventListener("toggle", () => {
+          if (d.open) track("faq_open", { q: d.dataset.faq });
+        });
+      });
+
+      // Profundidad de scroll: dispara una vez cuando una sección clave entra en
+      // vista. Independiente de prefers-reduced-motion: la analítica corre siempre.
+      if ("IntersectionObserver" in window) {
+        const seen = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) {
+                const name = (entry.target as HTMLElement).dataset.scroll;
+                if (name) track(name);
+                seen.unobserve(entry.target);
+              }
+            }
+          },
+          { threshold: 0.4 },
+        );
+        document.querySelectorAll("[data-scroll]").forEach((el) => seen.observe(el));
+      }
+    </script>
+
+    <script>
+      // Scroll storytelling ligero: revela secciones y "enciende" la constelación
+      // del acto de navegación. Sin librerías; IntersectionObserver básico.
+      // El contenido es visible por defecto (sin JS no se oculta nada); el
+      // efecto solo se "arma" cuando podemos garantizar que se va a revelar.
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const targets = document.querySelectorAll("[data-reveal]");
+      if (!reduced && "IntersectionObserver" in window) {
+        document.documentElement.classList.add("reveal-armed");
+        const observer = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add("in-view");
+                observer.unobserve(entry.target);
+              }
+            }
+          },
+          { threshold: 0.2 },
+        );
+        targets.forEach((el) => observer.observe(el));
+      }
+    </script>
+
+    <style>
+      html {
+        background: var(--karto-bg-bottom);
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: var(--karto-font-body);
+        background: var(--karto-bg);
+        background-attachment: fixed;
+        color: var(--karto-color-text);
+        overflow-x: hidden;
+      }
+      main, .hero, footer { position: relative; z-index: 1; }
+      main { max-width: 64rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
+      code {
+        font-size: 0.85em;
+        background: rgba(230, 234, 240, 0.08);
+        padding: 0.1em 0.35em;
+        border-radius: calc(var(--karto-radius) / 2);
+      }
+
+      /* Revelado al hacer scroll: solo se oculta cuando el JS armó el efecto. */
+      html.reveal-armed [data-reveal] {
+        opacity: 0;
+        transform: translateY(18px);
+        transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+      }
+      html.reveal-armed [data-reveal].in-view { opacity: 1; transform: none; }
+
+      /* ── Hero ── */
+      .hero {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: var(--karto-space-8) var(--karto-space-6);
+      }
+      .hero-inner {
+        position: relative;
+        max-width: 52rem;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--karto-space-6);
+      }
+      .badge {
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        color: var(--karto-color-accent);
+        border: 1px solid rgba(17, 178, 69, 0.35);
+        background: rgba(17, 178, 69, 0.07);
+        padding: var(--karto-space-2) var(--karto-space-4);
+        border-radius: 99px;
+      }
+      .badge::before {
+        content: "●";
+        margin-right: 0.5em;
+        font-size: 0.7em;
+        vertical-align: 15%;
+        animation: badge-blink 2.6s ease-in-out infinite;
+        display: inline-block;
+      }
+      @keyframes badge-blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.35; }
+      }
+      h1 {
+        font-family: var(--karto-font-title);
+        font-weight: 700;
+        font-size: clamp(2.2rem, 6vw, 3.6rem);
+        line-height: 1.08;
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      h1 em { font-style: normal; color: var(--karto-color-accent); }
+      .sub {
+        font-size: clamp(1rem, 2.2vw, 1.2rem);
+        line-height: 1.6;
+        color: var(--karto-color-text-muted);
+        max-width: 38rem;
+        margin: 0;
+      }
+      .sub strong { color: var(--karto-color-text); font-weight: 500; }
+      .ctas {
+        display: flex;
+        gap: var(--karto-space-4);
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+      }
+      .btn-ghost {
+        font-family: var(--karto-font-title);
+        font-weight: 600;
+        font-size: 1rem;
+        color: var(--karto-color-text);
+        border: 1px solid var(--karto-color-border);
+        background: rgba(18, 22, 31, 0.6);
+        padding: var(--karto-space-3) var(--karto-space-6);
+        border-radius: var(--karto-radius);
+        text-decoration: none;
+        transition: border-color 0.15s;
+      }
+      .btn-ghost:hover { border-color: var(--karto-color-accent); }
+
+      /* ── Hechos duros ── */
+      .facts {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: var(--karto-space-3) var(--karto-space-8);
+        border-block: 1px solid var(--karto-color-border);
+        padding: var(--karto-space-5) var(--karto-space-4);
+        font-size: 0.9rem;
+        color: var(--karto-color-text-muted);
+        letter-spacing: 0.04em;
+      }
+      .facts b {
+        color: var(--karto-color-accent);
+        font-weight: 700;
+        margin-right: 0.35em;
+      }
+
+      /* ── Actos ── */
+      .act { margin-top: calc(var(--karto-space-base) * 24); }
+      .act header {
+        text-align: center;
+        max-width: 42rem;
+        margin: 0 auto;
+      }
+      .act-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--karto-color-accent);
+        margin: 0 0 var(--karto-space-2);
+      }
+      h2 {
+        font-family: var(--karto-font-title);
+        font-weight: 600;
+        font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+        margin: 0 0 var(--karto-space-2);
+      }
+      .act-sub {
+        color: var(--karto-color-text-muted);
+        line-height: 1.6;
+        margin: 0;
+      }
+
+      /* Fichas de catálogo estelar */
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+        gap: var(--karto-space-6);
+        margin-top: var(--karto-space-8);
+      }
+      .cards-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      @media (max-width: 40rem) {
+        .cards-2 { grid-template-columns: 1fr; }
+      }
+      .card {
+        background: var(--karto-color-surface);
+        border: 1px solid var(--karto-color-border);
+        padding: var(--karto-space-6);
+        border-radius: calc(var(--karto-radius) * 2);
+        transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+      }
+      .card:hover {
+        border-color: rgba(17, 178, 69, 0.4);
+        box-shadow: 0 0 32px rgba(17, 178, 69, 0.08);
+        transform: translateY(-2px);
+      }
+      .card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--karto-space-3);
+      }
+      .glyph {
+        display: inline-grid;
+        place-items: center;
+        width: calc(var(--karto-space-base) * 12);
+        height: calc(var(--karto-space-base) * 12);
+        border-radius: 50%;
+        border: 1px solid rgba(17, 178, 69, 0.3);
+        box-shadow: 0 0 18px rgba(17, 178, 69, 0.18) inset, 0 0 12px rgba(17, 178, 69, 0.12);
+        line-height: 0;
+      }
+      .card-id {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        color: var(--karto-color-text-muted);
+        opacity: 0.7;
+      }
+      .card h3 {
+        font-family: var(--karto-font-title);
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin: 0 0 var(--karto-space-2);
+      }
+      .card p {
+        color: var(--karto-color-text-muted);
+        font-size: 0.92rem;
+        line-height: 1.55;
+        margin: 0;
+      }
+
+      /* Perfiles */
+      .audience-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--karto-color-accent);
+        margin: 0 0 var(--karto-space-3);
+      }
+
+      /* ── Constelación que enciende (acto navegación) ── */
+      .ignite {
+        margin: var(--karto-space-8) auto 0;
+        max-width: 40rem;
+      }
+      .ignite svg { width: 100%; display: block; }
+      .ignite text {
+        font-family: var(--karto-font-body);
+        font-size: 10px;
+        fill: rgba(230, 234, 240, 0.5);
+        letter-spacing: 0.04em;
+      }
+      .ignite figcaption {
+        text-align: center;
+        font-size: 0.8rem;
+        color: var(--karto-color-text-muted);
+        margin-top: var(--karto-space-3);
+      }
+      .i-edge { stroke: rgba(230, 234, 240, 0.25); stroke-width: 1; }
+      .i-ring { fill: none; stroke: rgba(230, 234, 240, 0.35); stroke-width: 1; }
+      .i-core {
+        fill: var(--karto-color-accent);
+        filter: drop-shadow(0 0 5px var(--karto-color-accent));
+        transition: fill 0.5s ease-out, filter 0.5s ease-out;
+        transition-delay: calc(var(--i) * 0.35s + 0.4s);
+      }
+      html.reveal-armed [data-ignite]:not(.in-view) .i-core {
+        fill: rgba(230, 234, 240, 0.25);
+        filter: none;
+      }
+
+      /* ── Despega + FAQ ── */
+      .launch { text-align: center; }
+      .launch-box {
+        border: 1px solid var(--karto-color-border);
+        border-radius: calc(var(--karto-radius) * 2);
+        background:
+          radial-gradient(ellipse at 50% 0%, rgba(17, 178, 69, 0.08), transparent 65%),
+          var(--karto-color-surface);
+        padding: calc(var(--karto-space-base) * 14) var(--karto-space-8);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--karto-space-4);
+      }
+      .launch-box h2 { margin: 0; }
+      .launch-note {
+        font-size: 0.8rem;
+        color: var(--karto-color-text-muted);
+        margin: 0;
+      }
+      .faq {
+        max-width: 42rem;
+        margin: var(--karto-space-8) auto 0;
+        text-align: left;
+      }
+      .faq details {
+        border-bottom: 1px solid var(--karto-color-border);
+        padding: var(--karto-space-4) var(--karto-space-2);
+      }
+      .faq summary {
+        font-family: var(--karto-font-title);
+        font-weight: 600;
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--karto-space-4);
+      }
+      .faq summary::-webkit-details-marker { display: none; }
+      .faq summary::after {
+        content: "+";
+        color: var(--karto-color-accent);
+        font-weight: 400;
+        font-size: 1.2rem;
+        transition: rotate 0.2s;
+      }
+      .faq details[open] summary::after { rotate: 45deg; }
+      .faq details p {
+        color: var(--karto-color-text-muted);
+        line-height: 1.6;
+        margin: var(--karto-space-3) 0 0;
+      }
+
+      /* ── Footer ── */
+      footer {
+        max-width: 64rem;
+        margin: 0 auto;
+        padding: var(--karto-space-8) 1.5rem;
+        border-top: 1px solid var(--karto-color-border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--karto-space-4);
+        font-size: 0.85rem;
+        color: var(--karto-color-text-muted);
+      }
+      footer p { margin: 0; }
+      footer a {
+        color: var(--karto-color-text);
+        text-decoration: none;
+        border-bottom: 1px solid rgba(17, 178, 69, 0.4);
+        transition: border-color 0.15s;
+      }
+      footer a:hover { border-color: var(--karto-color-accent); }
+      footer nav { display: flex; gap: var(--karto-space-5); }
+      .lang-switch { font-weight: 600; }
+      /* Envoltura solo-tracking: no debe alterar el layout del CTA. */
+      .track { display: contents; }
+    </style>
+  </body>
+</html>

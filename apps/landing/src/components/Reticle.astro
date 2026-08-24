@@ -1,0 +1,43 @@
+---
+// Retícula de carta astronómica: círculos concéntricos y marcas de grados
+// muy tenues detrás del hero, con rotación casi imperceptible (4 min/vuelta).
+---
+
+<svg class="reticle" viewBox="0 0 1000 1000" aria-hidden="true">
+  <g class="rotor">
+    <g fill="none" stroke="#e6eaf0" stroke-width="1">
+      <circle cx="500" cy="500" r="180" />
+      <circle cx="500" cy="500" r="320" />
+      <circle cx="500" cy="500" r="460" stroke-dasharray="2 6" />
+      <line x1="500" y1="20" x2="500" y2="980" stroke-dasharray="1 10" />
+      <line x1="20" y1="500" x2="980" y2="500" stroke-dasharray="1 10" />
+    </g>
+    <g fill="none" stroke="#e6eaf0" stroke-width="2">
+      <path d="M500 30 v18 M500 952 v18 M30 500 h18 M952 500 h18" />
+      <path d="M175 175 l12 12 M825 175 l-12 12 M175 825 l12 -12 M825 825 l-12 -12" />
+    </g>
+  </g>
+</svg>
+
+<style>
+  .reticle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(140vmin, 1100px);
+    height: min(140vmin, 1100px);
+    pointer-events: none;
+    opacity: 0.05;
+  }
+  .rotor {
+    transform-origin: 500px 500px;
+    animation: rotate 240s linear infinite;
+  }
+  @keyframes rotate {
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rotor { animation: none; }
+  }
+</style>

@@ -9,6 +9,10 @@ pub enum AppError {
     NotFound,
     #[error("no hay ningún vault abierto")]
     NoVaultOpen,
+    /// Este vault trae una plantilla de conexión personalizada y aún no se ha
+    /// confirmado su ejecución. El texto es el comando a mostrar en la confirmación.
+    #[error("confirmación de plantilla requerida: {0}")]
+    TemplateConfirmationRequired(String),
     #[error("error de base de datos: {0}")]
     Db(String),
     #[error("error de E/S: {0}")]

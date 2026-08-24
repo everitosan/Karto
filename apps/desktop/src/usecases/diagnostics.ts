@@ -2,13 +2,14 @@
 // (no del vault): el nivel se guarda en el app_store y el archivo vive en el dir
 // de datos de la app. `normalizeLevel` es puro y testeable sin backend.
 import { bridge, type Bridge } from "./tauri";
+import { m } from "$paraglide/messages.js";
 
 export type LogLevel = "info" | "warning" | "error";
 
 export const LOG_LEVELS: { value: LogLevel; label: string; hint: string }[] = [
-  { value: "info", label: "Info", hint: "Información de acciones comunes." },
-  { value: "warning", label: "Warning", hint: "Avisos y errores (por defecto)." },
-  { value: "error", label: "Error", hint: "Solo errores." },
+  { value: "info", label: "Info", hint: m.diag_level_info_hint() },
+  { value: "warning", label: "Warning", hint: m.diag_level_warning_hint() },
+  { value: "error", label: "Error", hint: m.diag_level_error_hint() },
 ];
 
 /** Sanea el nivel crudo del backend a un `LogLevel` válido (fallback Warning). */

@@ -5,7 +5,12 @@
 import type { Credential } from "$domain/infra";
 import { workspaceUseCases } from "$usecases/workspace";
 import { networkContext } from "../networkContext.svelte";
-import { needsKeyOnboarding, pickCredential, type KeyOnboardingChoice } from "./connectFlow";
+import {
+  needsKeyOnboarding,
+  pickCredential,
+  templateConfirmCommand,
+  type KeyOnboardingChoice,
+} from "./connectFlow";
 
 interface Pending {
   nodeId: string;
@@ -17,6 +22,18 @@ interface Pending {
 export const onboarding = $state<{ pending: Pending | null; busy: boolean }>({
   pending: null,
   busy: false,
+});
+
+// --- Confirmación de plantilla de vault importado ---
+interface TemplateConfirm {
+  nodeId: string;
+  credentialId: string | null;
+  command: string;
+}
+
+// Estado del diálogo de confirmación (lo muestra el Canvas, igual que onboarding).
+export const templateConfirm = $state<{ pending: TemplateConfirm | null }>({
+  pending: null,
 });
 
 // --- Sondeo de datos del equipo tras conectar por SSH ---
@@ -51,6 +68,27 @@ async function collectFacts(nodeId: string): Promise<void> {
 }
 
 /**
+ * Lanza la conexión capturando el aviso de confirmación de plantilla: si el vault
+ * (importado) trae una plantilla personalizada sin confianza, en vez de ejecutarla
+ * abre el diálogo de confirmación. Devuelve `true` si conectó, `false` si quedó a
+ * la espera de confirmación. Otros errores se propagan.
+ */
+async function connectOrConfirm(
+  nodeId: string,
+  credentialId: string | null,
+): Promise<boolean> {
+  try {
+    await workspaceUseCases.connectNode(nodeId, credentialId, networkContext.activeId);
+    return true;
+  } catch (err) {
+    const command = templateConfirmCommand(err);
+    if (command === null) throw err;
+    templateConfirm.pending = { nodeId, credentialId, command };
+    return false;
+  }
+}
+
+/**
  * Punto de entrada desde la UI. Si la credencial objetivo es SSH por contraseña
  * (sin llave), abre el modal de onboarding; si no, conecta directo.
  */
@@ -65,9 +103,26 @@ export async function requestConnect(
     onboarding.pending = { nodeId, credential: credential!, onProvisioned };
     return;
   }
-  await workspaceUseCases.connectNode(nodeId, credentialId, networkContext.activeId);
+  const connected = await connectOrConfirm(nodeId, credentialId);
   // Al conectar por SSH, la terminal sondea el equipo; recogemos los datos.
-  if (credential?.kind === "ssh") void collectFacts(nodeId);
+  if (connected && credential?.kind === "ssh") void collectFacts(nodeId);
+}
+
+/**
+ * Aplica la confirmación de la plantilla: marca el vault como de confianza en esta
+ * máquina y reintenta la conexión (que ahora sí ejecuta la plantilla).
+ */
+export async function confirmTemplateTrust(): Promise<void> {
+  const pending = templateConfirm.pending;
+  if (!pending) return;
+  await workspaceUseCases.trustVaultTemplates();
+  templateConfirm.pending = null;
+  const connected = await connectOrConfirm(pending.nodeId, pending.credentialId);
+  if (connected) void collectFacts(pending.nodeId);
+}
+
+export function cancelTemplateTrust(): void {
+  templateConfirm.pending = null;
 }
 
 /** Aplica la elección del modal: aprovisiona la llave o conecta con contraseña. */
@@ -86,12 +141,8 @@ export async function confirmOnboarding(choice: KeyOnboardingChoice): Promise<vo
       );
       pending.onProvisioned?.();
     } else {
-      await workspaceUseCases.connectNode(
-        pending.nodeId,
-        pending.credential.id,
-        networkContext.activeId,
-      );
-      void collectFacts(pending.nodeId);
+      const connected = await connectOrConfirm(pending.nodeId, pending.credential.id);
+      if (connected) void collectFacts(pending.nodeId);
     }
     onboarding.pending = null;
   } finally {

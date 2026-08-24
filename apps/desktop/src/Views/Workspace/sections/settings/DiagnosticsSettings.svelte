@@ -7,6 +7,7 @@
     LOG_LEVELS,
     type LogLevel,
   } from "$usecases/diagnostics";
+  import { m } from "$paraglide/messages.js";
 
   let level = $state<LogLevel>("warning");
   let logPath = $state("");
@@ -20,7 +21,7 @@
         level = await diagnosticsUseCases.getLevel();
         logPath = await diagnosticsUseCases.logPath();
       } catch {
-        message = { kind: "err", text: "No se pudo leer la configuración del log." };
+        message = { kind: "err", text: m.diag_read_error() };
       }
     })();
   });
@@ -33,10 +34,10 @@
     message = null;
     try {
       await diagnosticsUseCases.setLevel(next);
-      message = { kind: "ok", text: "Nivel del log actualizado." };
+      message = { kind: "ok", text: m.diag_level_updated() };
     } catch {
       level = prev; // revierte si falla el guardado
-      message = { kind: "err", text: "No se pudo cambiar el nivel del log." };
+      message = { kind: "err", text: m.diag_level_error() };
     } finally {
       savingLevel = false;
     }
@@ -47,7 +48,7 @@
     try {
       await diagnosticsUseCases.openLogDir();
     } catch {
-      message = { kind: "err", text: "No se pudo abrir la carpeta del log." };
+      message = { kind: "err", text: m.diag_open_error() };
     }
   }
 
@@ -56,21 +57,19 @@
     message = null;
     try {
       await navigator.clipboard.writeText(logPath);
-      message = { kind: "ok", text: "Ruta copiada al portapapeles." };
+      message = { kind: "ok", text: m.diag_copied() };
     } catch {
-      message = { kind: "err", text: "No se pudo copiar la ruta." };
+      message = { kind: "err", text: m.diag_copy_error() };
     }
   }
 </script>
 
 <section class="group">
-  <h4>Nivel de registro</h4>
+  <h4>{m.diag_level_title()}</h4>
   <p class="hint">
-    Controla cuánto detalle se guarda en el log de soporte. <strong>Warning</strong> (por defecto)
-    registra avisos y errores; <strong>Info</strong> añade más detalle; <strong>Error</strong> deja solo
-    los fallos.
+    {@html m.diag_level_hint()}
   </p>
-  <div class="levels" role="radiogroup" aria-label="Nivel de registro">
+  <div class="levels" role="radiogroup" aria-label={m.diag_level_title()}>
     {#each LOG_LEVELS as opt (opt.value)}
       <button
         class="level"
@@ -88,21 +87,20 @@
 </section>
 
 <section class="group">
-  <h4>Archivo de log</h4>
+  <h4>{m.diag_file_title()}</h4>
   <p class="hint">
-    Si tienes un problema, comparte este archivo con soporte. No contiene contraseñas ni direcciones
-    (IP/host): solo la información necesaria para identificar el fallo.
+    {m.diag_file_hint()}
   </p>
   {#if logPath}
     <div class="path-wrap">
       <code class="path" title={logPath}>{logPath}</code>
-      <button class="path-copy" onclick={copyPath} title="Copiar ruta" aria-label="Copiar ruta">
+      <button class="path-copy" onclick={copyPath} title={m.diag_copy_path()} aria-label={m.diag_copy_path()}>
         <Icon icon={icons.copy} size={15} />
       </button>
     </div>
   {/if}
   <div class="actions">
-    <Button variant="secondary" onclick={openFolder}>Abrir carpeta</Button>
+    <Button variant="secondary" onclick={openFolder}>{m.diag_open_folder()}</Button>
   </div>
 </section>
 

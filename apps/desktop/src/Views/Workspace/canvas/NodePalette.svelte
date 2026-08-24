@@ -3,10 +3,12 @@
   // canvas para crear un nodo. Cada categoría es un acordeón y una barra de
   // búsqueda filtra los tipos por etiqueta.
   import { Icon, icons } from "@karto/ui";
-  import { nodesByCategory, NODE_CATALOG, NODE_KIND_LABELS } from "$domain/infra";
+  import { NODE_CATALOG } from "$domain/infra";
+  import { nodeGroups, nodeKindLabel, nodeSearchText } from "$i18n/catalog";
+  import { m } from "$paraglide/messages.js";
   import { DND_MIME } from "./dnd";
 
-  const groups = nodesByCategory();
+  const groups = nodeGroups();
 
   let query = $state("");
 
@@ -48,9 +50,7 @@
       .map((g) => ({
         ...g,
         forceOpen: true,
-        kinds: g.kinds.filter((k) =>
-          NODE_KIND_LABELS[k].toLowerCase().includes(q),
-        ),
+        kinds: g.kinds.filter((k) => nodeSearchText(k).includes(q)),
       }))
       .filter((g) => g.kinds.length > 0);
   });
@@ -62,17 +62,17 @@
 </script>
 
 <div class="palette">
-  <div class="title">Nodos</div>
+  <div class="title">{m.palette_title()}</div>
   <div class="search">
     <Icon icon={icons.search} size={14} />
     <input
       type="text"
-      placeholder="Buscar tipo…"
+      placeholder={m.palette_search()}
       bind:value={query}
       spellcheck="false"
     />
     {#if query}
-      <button class="clear" title="Limpiar" onclick={() => (query = "")}>
+      <button class="clear" title={m.common_clear()} onclick={() => (query = "")}>
         <Icon icon={icons.close} size={13} />
       </button>
     {/if}
@@ -100,16 +100,16 @@
           ondragstart={(e) => onDragStart(kind, e)}
         >
           <Icon icon={NODE_CATALOG[kind].icon} size={18} />
-          <span>{NODE_KIND_LABELS[kind]}</span>
+          <span>{nodeKindLabel(kind)}</span>
         </div>
       {/each}
     {/if}
   {:else}
-    <p class="hint">Sin coincidencias para «{query}».</p>
+    <p class="hint">{m.palette_no_matches({ query })}</p>
   {/each}
 
   {#if !query}
-    <p class="hint">Arrastra un tipo al lienzo.</p>
+    <p class="hint">{m.palette_drag_hint()}</p>
   {/if}
 </div>
 

@@ -3,6 +3,7 @@
   import { Button } from "@karto/ui";
   import { vaultUseCases } from "$usecases/vault";
   import { pickBackupPath } from "$usecases/dialog";
+  import { m } from "$paraglide/messages.js";
 
   let backupBusy = $state(false);
   let backupMessage = $state<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -14,9 +15,9 @@
     backupBusy = true;
     try {
       await vaultUseCases.exportBackup(dest);
-      backupMessage = { kind: "ok", text: "Copia guardada correctamente." };
+      backupMessage = { kind: "ok", text: m.backup_ok() };
     } catch {
-      backupMessage = { kind: "err", text: "No se pudo escribir la copia (¿el archivo ya existe?)." };
+      backupMessage = { kind: "err", text: m.backup_error() };
     } finally {
       backupBusy = false;
     }
@@ -24,14 +25,13 @@
 </script>
 
 <section class="group">
-  <h4>Copia de respaldo cifrada</h4>
+  <h4>{m.backup_title()}</h4>
   <div class="row">
     <p class="hint">
-      Genera un archivo <code>.karto</code> cifrado con la contraseña actual. Guárdalo en un lugar
-      seguro: si olvidas la contraseña, los datos son irrecuperables.
+      {m.backup_hint_before()}<code>.karto</code>{m.backup_hint_after()}
     </p>
     <Button variant="secondary" onclick={exportBackup} disabled={backupBusy}>
-      {backupBusy ? "Exportando…" : "Exportar copia cifrada…"}
+      {backupBusy ? m.export_exporting() : m.backup_export_btn()}
     </Button>
   </div>
   {#if backupMessage}

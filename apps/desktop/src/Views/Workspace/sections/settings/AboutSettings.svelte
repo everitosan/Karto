@@ -6,6 +6,7 @@
   import { getVersion } from "@tauri-apps/api/app";
   import { aboutUseCases } from "$usecases/about";
   import { REPO_URL, DONATE_URL } from "$config/links";
+  import { m } from "$paraglide/messages.js";
 
   type LinkItem =
     | { kind: "tech"; name: string; label: string; url: string }
@@ -33,7 +34,7 @@
     {
       kind: "icon",
       icon: icons.bug,
-      label: "Reportar un problema",
+      label: m.about_report_issue(),
       url: `${REPO_URL}/issues`,
     },
   ];
@@ -53,7 +54,7 @@
     try {
       await aboutUseCases.openExternalUrl(url);
     } catch {
-      error = "No se pudo abrir el enlace.";
+      error = m.about_open_error();
     }
   }
 </script>
@@ -66,29 +67,29 @@
       <span class="version">v{version}</span>
     {/if}
     <p class="by">
-      Hecho por <strong>evesan</strong>
+      {m.about_made_by()} <strong>evesan</strong>
     </p>
   </div>
 </section>
 
 <section class="group support">
-  <h4>Apoya el proyecto</h4>
+  <h4>{m.about_support_title()}</h4>
   <p class="hint">
-    Karto es gratuito y de código abierto (<button
+    {m.about_opensource_before()}<button
       class="linktext"
-      onclick={() => open(`${REPO_URL}/blob/main/LICENSE`)}>Licencia MIT</button
-    >).
+      onclick={() => open(`${REPO_URL}/blob/main/LICENSE`)}>{m.about_license_link()}</button
+    >{m.about_opensource_after()}
   </p>
-  <p class="hint"> Si te resulta útil, puedes invitarme un café para apoyar su desarrollo. </p>
+  <p class="hint"> {m.about_support_hint()} </p>
   <button class="coffee" onclick={() => open(DONATE_URL)} title={DONATE_URL}>
     <Icon icon={icons.coffee} size={18} />
-    <span>Invítame un café</span>
+    <span>{m.topbar_donate()}</span>
   </button>
 </section>
 
 
 <section class="group bottom">
-  <h4>Enlaces</h4>
+  <h4>{m.about_links()}</h4>
   <div class="links">
     {#each LINKS as item (item.url)}
       <button class="link" onclick={() => open(item.url)} title={item.url}>

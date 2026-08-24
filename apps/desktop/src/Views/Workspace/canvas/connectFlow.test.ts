@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Credential } from "$domain/infra";
-import { needsKeyOnboarding, pickCredential } from "./connectFlow";
+import { needsKeyOnboarding, pickCredential, templateConfirmCommand } from "./connectFlow";
 
 function cred(overrides: Partial<Credential> = {}): Credential {
   return {
@@ -50,5 +50,24 @@ describe("needsKeyOnboarding", () => {
 
   it("false si no hay credencial", () => {
     expect(needsKeyOnboarding(undefined)).toBe(false);
+  });
+});
+
+describe("templateConfirmCommand", () => {
+  it("extrae el comando del aviso de confirmación de plantilla", () => {
+    expect(
+      templateConfirmCommand("confirmación de plantilla requerida: ssh -i /k host"),
+    ).toBe("ssh -i /k host");
+  });
+
+  it("acepta el error como objeto Error", () => {
+    expect(
+      templateConfirmCommand(new Error("confirmación de plantilla requerida: rm -rf /")),
+    ).toBe("rm -rf /");
+  });
+
+  it("devuelve null para otros errores (se propagan)", () => {
+    expect(templateConfirmCommand("contraseña incorrecta")).toBeNull();
+    expect(templateConfirmCommand("no hay ningún vault abierto")).toBeNull();
   });
 });

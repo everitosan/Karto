@@ -51,6 +51,10 @@ pub struct ScriptTarget {
     pub kind: String,
     /// Gestor de BD (`postgresql`, `mysql`…) si el nodo lo declara.
     pub gestor: Option<String>,
+    /// Sistema operativo declarado (propiedad `os`); relevante en server/vm.
+    pub os: Option<String>,
+    /// Nombre de la BD/instancia registrada (propiedad `instancia`); en `database`.
+    pub instance: Option<String>,
     /// Tiene credencial SSH con llave (para bash/python).
     pub ssh_key: bool,
     /// Tiene credencial de BD (`kind='db'`) para los motores de BD.
@@ -87,6 +91,8 @@ pub fn list_targets(conn: &Connection, map_id: &str) -> AppResult<Vec<ScriptTarg
             node_id: node.id,
             label: node.label,
             gestor: node.properties.get("gestor").cloned(),
+            os: node.properties.get("os").cloned(),
+            instance: node.properties.get("instancia").cloned(),
             kind: node.kind,
             ssh_key,
             db_cred,
@@ -589,6 +595,58 @@ pub fn emit_error(node_id: &str, message: &str, emit: &(dyn Fn(RunEvent) + Sync)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infra::migrations;
+
+    // Reproducción del reporte: un nodo con endpoint de contexto Y hostname.
+    // El script debe resolver por el endpoint del contexto, no por el hostname.
+    fn seed_target(engine: Option<&str>) -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        migrations::run(&conn).unwrap();
+        conn.execute("INSERT INTO maps (id, name) VALUES ('m1','Mapa')", []).unwrap();
+        conn.execute(
+            "INSERT INTO nodes (id, map_id, kind, label) VALUES ('n1','m1','server','Web')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO node_endpoints (node_id, context_id, address) VALUES ('n1','default','10.0.0.9')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO node_properties (node_id, key, value) VALUES ('n1','hostname','web.local')",
+            [],
+        )
+        .unwrap();
+        match engine {
+            Some(_) => conn.execute(
+                "INSERT INTO credentials (id, node_id, kind, username, secret, is_default) \
+                 VALUES ('c1','n1','db','app','pw',1)",
+                [],
+            ),
+            None => conn.execute(
+                "INSERT INTO credentials (id, node_id, kind, username, key_path, is_default) \
+                 VALUES ('c1','n1','ssh','root','/home/me/.ssh/id',1)",
+                [],
+            ),
+        }
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn resolve_ssh_target_prefers_context_endpoint_over_hostname() {
+        let conn = seed_target(None);
+        let req = resolve_target(&conn, "n1", Some("default")).unwrap();
+        assert_eq!(req.host, "10.0.0.9", "debe usar el endpoint del contexto");
+    }
+
+    #[test]
+    fn resolve_db_target_prefers_context_endpoint_over_hostname() {
+        let conn = seed_target(Some("postgresql"));
+        let c = resolve_db_target(&conn, "n1", Some("default"), "postgresql").unwrap();
+        assert_eq!(c.host, "10.0.0.9", "debe usar el endpoint del contexto");
+    }
 
     fn ssh_req(key: Option<&str>) -> ConnectionRequest {
         ConnectionRequest {

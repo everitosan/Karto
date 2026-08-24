@@ -2,6 +2,8 @@
   // Agrupador visual: rectángulo de fondo redimensionable con etiqueta y color.
   // No es un equipo; agrupa nodos visualmente (VPC/subred/zona/región).
   import { NodeResizer, Handle, Position, type NodeProps } from "@xyflow/svelte";
+  import { TechIcon } from "@karto/ui";
+  import { NODE_CATALOG } from "$domain/infra";
 
   type ZoneData = {
     label: string;
@@ -14,6 +16,14 @@
   let { data, selected }: NodeProps & { data: ZoneData } = $props();
 
   const isActive = (side: string) => data.activeHandles?.includes(side) ?? false;
+
+  // Icono de marca según el `tipo` de la zona (p. ej. Docker/Kubernetes). Se lee
+  // del propio catálogo, así basta añadir un `icon` a la opción para que aparezca.
+  const tipoOptions =
+    NODE_CATALOG.zone.properties.find((p) => p.key === "tipo")?.options ?? [];
+  const brandIcon = $derived(
+    tipoOptions.find((o) => o.value === data.properties?.tipo)?.icon,
+  );
 
   const COLORS: Record<string, string> = {
     slate: "#64748b",
@@ -34,7 +44,10 @@
 />
 
 <div class="zone" class:selected style="--zc: {hex};">
-  <span class="zone-label">{data.label}</span>
+  <span class="zone-label">
+    {#if brandIcon}<TechIcon name={brandIcon} size={13} />{/if}
+    {data.label}
+  </span>
   <!-- 4 puntos de conexión con id (como los nodos): con ConnectionMode.Loose
        cada lado sirve de origen y destino, y el id deja que la arista recuerde
        el lado al recargar y marque el indicador de conexión activa. -->
@@ -61,6 +74,9 @@
     position: absolute;
     top: 6px;
     left: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-size: 0.8rem;
     font-weight: 600;
     color: color-mix(in srgb, var(--zc) 65%, #ffffff);

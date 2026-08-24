@@ -3,6 +3,7 @@
   // Recibe cuántos nodos se exportan; delega el guardado en el padre.
   import { Modal, Button, Checkbox } from "@karto/ui";
   import PasswordField from "$components/PasswordField.svelte";
+  import { m } from "$paraglide/messages.js";
 
   interface Props {
     open: boolean;
@@ -33,11 +34,11 @@
   async function submit() {
     error = null;
     if (password.length < 8) {
-      error = "La contraseña debe tener al menos 8 caracteres.";
+      error = m.export_error_short();
       return;
     }
     if (password !== confirm) {
-      error = "La confirmación no coincide.";
+      error = m.export_error_mismatch();
       return;
     }
     busy = true;
@@ -52,34 +53,31 @@
   }
 </script>
 
-<Modal {open} title="Exportar selección" {onClose}>
+<Modal {open} title={m.export_title()} {onClose}>
   <p class="lead">
-    Se exportarán <strong>{nodeCount}</strong>
-    {nodeCount === 1 ? "nodo" : "nodos"} y las conexiones entre ellos a un
-    <code>.karto</code> nuevo, cifrado con una contraseña propia (para compartir sin revelar tu
-    contraseña maestra).
+    {@html nodeCount === 1 ? m.export_lead_one({ count: nodeCount }) : m.export_lead_other({ count: nodeCount })}
   </p>
 
   <div class="group">
-    <span class="lbl">Contenido a incluir</span>
-    <Checkbox bind:checked={includeCredentials}>Credenciales (usuario, secreto, llave)</Checkbox>
-    <Checkbox bind:checked={includeIp}>Direcciones / IP por contexto</Checkbox>
-    <Checkbox bind:checked={includeFacts}>Metadata del equipo (SO, kernel, recursos…)</Checkbox>
-    <Checkbox bind:checked={includeNotes}>Notas</Checkbox>
+    <span class="lbl">{m.export_content_label()}</span>
+    <Checkbox bind:checked={includeCredentials}>{m.export_incl_credentials()}</Checkbox>
+    <Checkbox bind:checked={includeIp}>{m.export_incl_ip()}</Checkbox>
+    <Checkbox bind:checked={includeFacts}>{m.export_incl_facts()}</Checkbox>
+    <Checkbox bind:checked={includeNotes}>{m.export_incl_notes()}</Checkbox>
   </div>
 
   <div class="group">
-    <span class="lbl">Contraseña del archivo exportado</span>
-    <PasswordField label="Contraseña" bind:value={password} />
-    <PasswordField label="Confirmar contraseña" bind:value={confirm} />
+    <span class="lbl">{m.export_password_label()}</span>
+    <PasswordField label={m.common_password()} bind:value={password} />
+    <PasswordField label={m.welcome_password_confirm()} bind:value={confirm} />
   </div>
 
   {#if error}<p class="error">{error}</p>{/if}
 
   {#snippet footer()}
-    <Button variant="ghost" onclick={onClose} disabled={busy}>Cancelar</Button>
+    <Button variant="ghost" onclick={onClose} disabled={busy}>{m.common_cancel()}</Button>
     <Button onclick={submit} disabled={!canExport || busy}>
-      {busy ? "Exportando…" : "Exportar…"}
+      {busy ? m.export_exporting() : m.export_submit()}
     </Button>
   {/snippet}
 </Modal>
@@ -90,7 +88,7 @@
     color: var(--karto-color-text-muted);
     margin: 0 0 1rem;
   }
-  .lead code {
+  .lead :global(code) {
     font-size: 0.75rem;
   }
   .group {

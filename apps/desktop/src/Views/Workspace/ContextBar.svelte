@@ -5,6 +5,7 @@
   // La gestión (alta/renombrar/borrar) sigue en el modal `ContextsModal`.
   import { Icon, icons } from "@karto/ui";
   import { networkContext, setActiveContext } from "./networkContext.svelte";
+  import { m } from "$paraglide/messages.js";
 
   interface Props {
     onManageContexts: () => void;
@@ -14,7 +15,7 @@
 </script>
 
 {#if networkContext.contexts.length > 0}
-  <div class="context" title="Contexto de red activo">
+  <div class="context" title={m.contextbar_active()}>
     <Icon icon={icons.link} size={15} />
     <select
       value={networkContext.activeId}
@@ -24,7 +25,7 @@
         <option value={ctx.id}>{ctx.name}</option>
       {/each}
     </select>
-    <button class="icon-btn" title="Gestionar contextos" onclick={onManageContexts}>
+    <button class="icon-btn" title={m.contextbar_manage()} onclick={onManageContexts}>
       <Icon icon={icons.settings} size={15} />
     </button>
   </div>

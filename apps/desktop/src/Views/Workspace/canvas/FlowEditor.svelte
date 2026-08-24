@@ -26,7 +26,8 @@
   import { Icon, icons } from "@karto/ui";
   import SubsetExportModal from "./SubsetExportModal.svelte";
   import type { Graph, InfraEdge, InfraNode, NodeKind } from "$domain/infra";
-  import { NODE_KIND_LABELS } from "$domain/infra";
+  import { nodeKindLabel } from "$i18n/catalog";
+  import { m } from "$paraglide/messages.js";
   import { workspaceUseCases as uc } from "$usecases/workspace";
   import InfraNodeView from "./InfraNode.svelte";
   import ZoneNodeView from "./ZoneNode.svelte";
@@ -92,10 +93,10 @@
 
   // Formas de línea (mini-trazos), como en Obsidian.
   const EDGE_SHAPES: { value: string; title: string; d: string }[] = [
-    { value: "default", title: "Curva", d: "M2 10 C8 10 16 2 22 2" },
-    { value: "smoothstep", title: "Escalonada suave", d: "M2 10 H9 Q12 10 12 7 V5 Q12 2 15 2 H22" },
-    { value: "step", title: "Escalonada", d: "M2 10 H12 V2 H22" },
-    { value: "straight", title: "Recta", d: "M2 6 H22" },
+    { value: "default", title: m.flow_edge_default(), d: "M2 10 C8 10 16 2 22 2" },
+    { value: "smoothstep", title: m.flow_edge_smoothstep(), d: "M2 10 H9 Q12 10 12 7 V5 Q12 2 15 2 H22" },
+    { value: "step", title: m.flow_edge_step(), d: "M2 10 H12 V2 H22" },
+    { value: "straight", title: m.flow_edge_straight(), d: "M2 6 H22" },
   ];
 
   const toFlowNode = (n: InfraNode): FlowNode => {
@@ -416,7 +417,7 @@
   async function editEdgeLabel(id: string) {
     const edge = flowEdges.find((e) => e.id === id);
     const current = typeof edge?.label === "string" ? edge.label : "";
-    const next = prompt("Etiqueta de la conexión (protocolo/puerto):", current);
+    const next = prompt(m.flow_edge_label_prompt(), current);
     if (next === null) return;
     const label = next.trim() || null;
     await uc.setEdgeLabel(id, label);
@@ -506,7 +507,7 @@
     if (!kind) return;
     e.preventDefault();
     const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-    const be = await uc.createNode(mapId, kind, NODE_KIND_LABELS[kind], pos.x, pos.y);
+    const be = await uc.createNode(mapId, kind, nodeKindLabel(kind), pos.x, pos.y);
     let flowNode = toFlowNode(be);
 
     // Si se suelta dentro de una zona, queda agrupado (posición relativa).
@@ -722,7 +723,7 @@
       await uc.exportWrite(path, bytes);
     } catch (e) {
       console.error("export falló", e);
-      alert(e instanceof Error ? e.message : "No se pudo exportar el diagrama");
+      alert(e instanceof Error ? e.message : m.flow_export_error());
     } finally {
       exporting = false;
     }
@@ -810,30 +811,30 @@
         <div class="export">
           <button
             class="export-btn"
-            title="Comprobar si los nodos responden"
+            title={m.flow_health_title()}
             disabled={checkingHealth}
             onclick={checkHealth}
           >
             <Icon icon={icons.connect} size={15} />
-            {checkingHealth ? "Comprobando…" : "Estado"}
+            {checkingHealth ? m.flow_health_checking() : m.flow_health_label()}
           </button>
           <button
             class="export-btn"
-            title="Exportar los nodos seleccionados a un vault nuevo"
+            title={m.flow_export_subset_title()}
             disabled={selectedNodeIds.length === 0}
             onclick={() => (subsetOpen = true)}
           >
             <Icon icon={icons.folder} size={15} />
-            Exportar selección{selectedNodeIds.length > 0 ? ` (${selectedNodeIds.length})` : ""}
+            {m.flow_export_selection()}{selectedNodeIds.length > 0 ? ` (${selectedNodeIds.length})` : ""}
           </button>
           <button
             class="export-btn"
-            title="Exportar diagrama"
+            title={m.flow_export_title()}
             disabled={exporting || flowNodes.length === 0}
             onclick={() => (exportMenuOpen = !exportMenuOpen)}
           >
             <Icon icon={icons.diagram} size={15} />
-            {exporting ? "Exportando…" : "Exportar"}
+            {exporting ? m.flow_exporting() : m.flow_export_label()}
           </button>
           {#if exportMenuOpen}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -841,10 +842,10 @@
             <div class="export-backdrop" onclick={() => (exportMenuOpen = false)}></div>
             <div class="export-menu" role="menu">
               <button class="export-item" role="menuitem" onclick={() => exportImage("png")}>
-                PNG (imagen)
+                {m.flow_export_png()}
               </button>
               <button class="export-item" role="menuitem" onclick={() => exportImage("svg")}>
-                SVG (vectorial)
+                {m.flow_export_svg()}
               </button>
             </div>
           {/if}
@@ -903,10 +904,10 @@
       </button>
     {/each}
     <span class="tdiv"></span>
-    <button class="tbtn" title="Editar etiqueta" onclick={() => editEdgeLabel(edgeToolbar!.id)}>
+    <button class="tbtn" title={m.flow_edit_label()} onclick={() => editEdgeLabel(edgeToolbar!.id)}>
       <Icon icon={icons.edit} size={15} />
     </button>
-    <button class="tbtn danger" title="Eliminar conexión" onclick={() => deleteEdgeById(edgeToolbar!.id)}>
+    <button class="tbtn danger" title={m.flow_delete_edge()} onclick={() => deleteEdgeById(edgeToolbar!.id)}>
       <Icon icon={icons.delete} size={15} />
     </button>
   </div>
@@ -1063,6 +1064,12 @@
   .flow :global(.svelte-flow__handle) {
     opacity: 0;
     transition: opacity 0.12s ease;
+    /* WebKitGTK: aislar la animación de opacidad en su propia capa evita que al
+       aparecer sobre el borde/sombra del nodo se repinte todo y parpadee. No se
+       toca `transform` (lo usa Svelte Flow para posicionar el handle). */
+    will-change: opacity;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
     /* Verde apagado (acento mezclado con gris): distingue el punto de conexión
        "disponible" del verde pleno que toma al quedar conectado (.active). */
     background: color-mix(in srgb, var(--karto-color-accent) 55%, #64748b);

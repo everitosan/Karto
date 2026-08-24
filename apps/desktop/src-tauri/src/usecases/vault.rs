@@ -82,12 +82,17 @@ impl<S: VaultStore> VaultService<S> {
     /// Verifica primero la contraseña actual abriendo una conexión efímera al
     /// mismo archivo; si no coincide, aborta sin tocar nada.
     pub fn rekey(&self, current: &str, new: &str) -> AppResult<()> {
+        use crate::infra::kdf;
         let session = self.session.lock().unwrap();
         let path = session.path.clone().ok_or(AppError::NoVaultOpen)?;
         // Verificación: si la contraseña actual es incorrecta, esto falla.
         drop(self.store.open(&path, current)?);
+        // Re-derivamos la clave nueva con Argon2id sobre el mismo salt de cabecera
+        // (rekey re-cifra las páginas sin cambiar el salt) y la aplicamos cruda.
+        let salt = kdf::read_header_salt(&path)?;
+        let key = kdf::derive_key(new, &salt)?;
         let conn = session.conn.as_ref().ok_or(AppError::NoVaultOpen)?;
-        conn.pragma_update(None, "rekey", new)?;
+        conn.pragma_update(None, "rekey", kdf::key_pragma(&key).as_str())?;
         Ok(())
     }
 

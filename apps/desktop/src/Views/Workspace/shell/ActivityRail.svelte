@@ -3,14 +3,15 @@
   // workspace. Diagramas y Scripts arriba; Configuración abajo (spacer flexible).
   import { Icon, icons } from "@karto/ui";
   import { sectionState, setSection, type Section } from "../section.svelte";
+  import { m } from "$paraglide/messages.js";
 
   const top: { id: Section; icon: keyof typeof icons; label: string }[] = [
-    { id: "diagrams", icon: "diagram", label: "Diagramas" },
-    { id: "scripts", icon: "script", label: "Scripts" },
+    { id: "diagrams", icon: "diagram", label: m.nav_diagrams() },
+    { id: "scripts", icon: "script", label: m.nav_scripts() },
   ];
 </script>
 
-<nav class="rail" aria-label="Secciones">
+<nav class="rail" aria-label={m.nav_sections()}>
   <div class="group">
     {#each top as item (item.id)}
       <button
@@ -29,7 +30,7 @@
     <button
       class="rail-btn"
       class:active={sectionState.active === "config"}
-      title="Configuración"
+      title={m.nav_config()}
       aria-current={sectionState.active === "config" ? "page" : undefined}
       onclick={() => setSection("config")}
     >

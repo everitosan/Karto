@@ -1,6 +1,7 @@
 <script lang="ts">
   // Componente de presentación compartido entre las vistas Welcome y Unlock.
   import { Icon, icons } from "@karto/ui";
+  import { m } from "$paraglide/messages.js";
 
   interface Props {
     label: string;
@@ -23,7 +24,7 @@
       autocomplete="off"
       spellcheck="false"
     />
-    <button type="button" onclick={() => (reveal = !reveal)} aria-label="Mostrar/ocultar">
+    <button type="button" onclick={() => (reveal = !reveal)} aria-label={m.password_toggle()}>
       <Icon icon={reveal ? icons.eyeOff : icons.eye} size={18} />
     </button>
   </div>

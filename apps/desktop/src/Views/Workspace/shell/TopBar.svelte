@@ -7,6 +7,7 @@
   import WindowControls from "./WindowControls.svelte";
   import { aboutUseCases } from "$usecases/about";
   import { DONATE_URL } from "$config/links";
+  import { m } from "$paraglide/messages.js";
 
   interface Props {
     vaultPath: string | null;
@@ -34,7 +35,7 @@
     <button
       class="icon-btn"
       class:active={!collapsed}
-      title={collapsed ? "Fijar barra lateral" : "Colapsar barra lateral"}
+      title={collapsed ? m.topbar_sidebar_pin() : m.topbar_sidebar_collapse()}
       aria-pressed={!collapsed}
       onclick={onToggleSidebar}
     >
@@ -44,7 +45,7 @@
 
   <!-- Zona 2 (centro): archivo abierto con su botón de cerrar a la izquierda. -->
   <div class="section section-center">
-    <button class="icon-btn" title="Cerrar vault (volver a la selección)" onclick={onClose}>
+    <button class="icon-btn" title={m.topbar_close_vault()} onclick={onClose}>
       <Icon icon={icons.closeSquare} size={18} />
     </button>
     <span class="path">{vaultPath}</span>
@@ -54,12 +55,12 @@
   <div class="section section-right">
     <button
       class="icon-btn coffee"
-      title="Invítame un café"
+      title={m.topbar_donate()}
       onclick={() => aboutUseCases.openExternalUrl(DONATE_URL)}
     >
       <Icon icon={icons.coffee} size={18} />
     </button>
-    <button class="icon-btn" title="Bloquear" aria-label="Bloquear" onclick={onLock}>
+    <button class="icon-btn" title={m.topbar_lock()} aria-label={m.topbar_lock()} onclick={onLock}>
       <Icon icon={icons.lock} size={18} />
     </button>
     <WindowControls />
