@@ -5,24 +5,13 @@ export { default as Typography } from "./Typography.svelte";
 export { default as Icon } from "./Icon.svelte";
 export { default as TechIcon } from "./TechIcon.svelte";
 export { default as Modal } from "./Modal.svelte";
+export { default as Checkbox } from "./Checkbox.svelte";
+export { default as FilePicker } from "./FilePicker.svelte";
+export { default as Tabs } from "./Tabs.svelte";
+export type { TabItem } from "./Tabs.svelte";
+export { default as Markdown } from "./Markdown.svelte";
+export { renderMarkdown } from "./markdown";
 export { icons } from "./icons";
-export type { NodeKind, NodeCategory } from "./types";
-export {
-  NODE_CATALOG,
-  NODE_CATEGORIES,
-  NODE_KINDS,
-  NODE_KIND_LABELS,
-  CATEGORY_LABELS,
-  nodeTypeIcon,
-  nodesByCategory,
-  resolveNodeIcon,
-} from "./catalog";
-export type {
-  NodeSpec,
-  PropertySpec,
-  PropertyOption,
-  ResolvedNodeIcon,
-} from "./catalog";
 export type {
   TypographyVariant,
   TypographyColor,

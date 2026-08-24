@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { Icon, icons, nodeTypeIcon } from "@karto/ui";
+import { Icon, icons } from "@karto/ui";
+import { nodeTypeIcon } from "@karto/catalog";
 
 const meta = {
   title: "UI/Icon",

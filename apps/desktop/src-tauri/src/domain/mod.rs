@@ -6,7 +6,7 @@
 pub mod ports;
 pub mod workspace;
 
-pub use workspace::{Credential, Edge, Folder, Graph, Map, Node};
+pub use workspace::{AccessContext, Credential, Edge, Folder, Graph, Map, Node, SearchHit};
 
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +46,16 @@ impl ConnectionKind {
             _ => None,
         }
     }
+
+    /// Clave textual estable (para logs de diagnóstico y persistencia).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ssh => "ssh",
+            Self::Vnc => "vnc",
+            Self::Rdp => "rdp",
+            Self::Web => "web",
+        }
+    }
 }
 
 /// Sistema operativo destino del lanzamiento. Se parametriza (en vez de usar
@@ -69,6 +79,15 @@ impl Os {
             Os::Linux
         }
     }
+
+    /// Clave estable para persistir/consultar por SO (p. ej. plantillas).
+    pub fn as_key(self) -> &'static str {
+        match self {
+            Os::Linux => "linux",
+            Os::Macos => "macos",
+            Os::Windows => "windows",
+        }
+    }
 }
 
 /// Petición de conexión ya resuelta desde el vault: host derivado de las
@@ -90,11 +109,24 @@ pub struct ConnectionRequest {
 
 // --- Import SSH ---
 
-#[derive(Debug, Serialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct ImportedHost {
     pub alias: String,
     pub hostname: Option<String>,
     pub user: Option<String>,
     pub port: Option<u16>,
     pub identity_file: Option<String>,
+}
+
+/// Archivo candidato a importar hallado bajo `~/.ssh` (config y `config.d/**`).
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CandidateFile {
+    /// Ruta absoluta del archivo.
+    pub path: String,
+    /// Nombre del archivo (para mostrar).
+    pub name: String,
+    /// Cuántos hosts se detectaron dentro (para dar contexto al usuario).
+    pub host_count: usize,
 }

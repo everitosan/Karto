@@ -42,8 +42,25 @@ pub struct Node {
     /// Nodo "zona" contenedor (agrupación). `x`/`y` son relativos al padre si
     /// está presente; absolutos si es `None`.
     pub parent_id: Option<String>,
-    /// Propiedades tipadas clave/valor (ip, hostname, url_admin, notas…).
+    /// Propiedades tipadas clave/valor (hostname, url_admin, notas…). La
+    /// dirección de conexión ya **no** vive aquí: es contextual (`endpoints`).
     pub properties: HashMap<String, String>,
+    /// Dirección del nodo por contexto de acceso (`context_id` → dirección). La
+    /// dirección efectiva depende del contexto activo; el `hostname` de
+    /// `properties` queda como respaldo estable si no hay endpoint.
+    pub endpoints: HashMap<String, String>,
+}
+
+/// Contexto de acceso (punto de vista de red): "Oficina", "VPN", "Público"…
+/// Determina qué dirección de cada nodo se usa al conectar. El contexto activo
+/// es estado local de cada equipo (no viaja en el vault); aquí solo se define el
+/// catálogo de contextos disponibles.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AccessContext {
+    pub id: String,
+    pub name: String,
+    pub position: i64,
 }
 
 /// Conexión etiquetada entre dos nodos.
@@ -64,6 +81,20 @@ pub struct Edge {
 pub struct Graph {
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
+}
+
+/// Resultado de la búsqueda global: un nodo que casa la consulta y dónde vive
+/// (en qué diagrama), con una descripción legible del campo que casó.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHit {
+    pub node_id: String,
+    pub map_id: String,
+    pub map_name: String,
+    pub kind: String,
+    pub label: String,
+    /// Campo que casó, legible: "etiqueta", "hostname · web01", "IP · 10.0.0.5".
+    pub matched: String,
 }
 
 /// Credencial de un nodo **sin el secreto** (el secreto solo viaja bajo

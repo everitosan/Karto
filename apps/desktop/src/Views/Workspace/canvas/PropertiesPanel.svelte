@@ -1,19 +1,26 @@
 <script lang="ts">
   // Panel lateral de propiedades del nodo seleccionado: etiqueta, propiedades
   // clave/valor y credenciales (secreto oculto por defecto, botón copiar).
-  import { Icon, TechIcon, icons, resolveNodeIcon } from "@karto/ui";
+  import { Icon, TechIcon, Tabs, Markdown, icons, type TabItem } from "@karto/ui";
+  import { resolveNodeIcon } from "@karto/catalog";
   import type { Credential, NodeKind } from "$domain/infra";
   import { NODE_KIND_LABELS, NODE_CATALOG } from "$domain/infra";
   import { workspaceUseCases as uc } from "$usecases/workspace";
   import CredentialModal, { type CredentialDraft } from "./CredentialModal.svelte";
+  import { clipboardManager } from "../clipboard";
+  import { appSettings } from "../appSettings.svelte";
+  import { networkContext } from "../networkContext.svelte";
+  import { requestConnect } from "./connectFlow.svelte";
 
   interface Props {
     nodeId: string;
     kind: NodeKind;
     label: string;
     properties: Record<string, string>;
+    endpoints: Record<string, string>;
     onLabel: (label: string) => void;
     onProperties: (properties: Record<string, string>) => void;
+    onEndpoints: (endpoints: Record<string, string>) => void;
     onClose: () => void;
     onDeleteNode: () => void;
   }
@@ -23,14 +30,29 @@
     kind,
     label,
     properties,
+    endpoints,
     onLabel,
     onProperties,
+    onEndpoints,
     onClose,
     onDeleteNode,
   }: Props = $props();
 
   // Especificación de propiedades sugeridas del tipo (del catálogo compartido).
   const spec = $derived(NODE_CATALOG[kind]);
+
+  // La propiedad `notas` se edita en su propia pestaña, no en Propiedades.
+  const specProps = $derived(spec.properties.filter((p) => p.key !== "notas"));
+
+  // Pestañas del panel. "Dirección" solo aplica a nodos conectables.
+  const tabs = $derived<TabItem[]>([
+    ...(spec.connectable
+      ? [{ id: "address", icon: icons.address, label: "Dirección" }]
+      : []),
+    { id: "properties", icon: icons.settings, label: "Propiedades" },
+    { id: "credentials", icon: icons.key, label: "Credenciales" },
+    { id: "notes", icon: icons.notes, label: "Notas" },
+  ]);
 
   // Valores de las propiedades del catálogo (por su `key`).
   let values = $state<Record<string, string>>({});
@@ -54,6 +76,33 @@
       Object.entries(properties).filter(([k]) => k.startsWith("_")),
     );
   });
+
+  // Direcciones por contexto (endpoints): dirección del nodo según el punto de
+  // vista de red. La efectiva depende del contexto activo; el hostname es el
+  // respaldo. Se editan aquí, una por contexto disponible.
+  let endpointValues = $state<Record<string, string>>({});
+  $effect(() => {
+    void nodeId;
+    endpointValues = Object.fromEntries(
+      networkContext.contexts.map((c) => [c.id, endpoints[c.id] ?? ""]),
+    );
+  });
+
+  // Notas en Markdown: arranca en modo vista si ya hay contenido, en edición si
+  // está vacío. Se reinicia al cambiar de nodo.
+  let notesEditing = $state(false);
+  $effect(() => {
+    void nodeId;
+    notesEditing = !properties.notas?.trim();
+  });
+
+  function commitEndpoints() {
+    const out: Record<string, string> = {};
+    for (const [id, addr] of Object.entries(endpointValues)) {
+      if (addr.trim()) out[id] = addr.trim();
+    }
+    onEndpoints(out);
+  }
 
   // Icono en vivo (refleja el gestor/framework elegido mientras se edita).
   const headerIcon = $derived(resolveNodeIcon(kind, values));
@@ -175,20 +224,35 @@
 
   async function copySecret(cred: Credential) {
     const secret = revealed[cred.id] ?? (await uc.revealCredential(cred.id)) ?? "";
-    try {
-      await navigator.clipboard.writeText(secret);
-    } catch {
-      // El portapapeles puede no estar disponible fuera de la app empaquetada.
-    }
+    // Copia con limpieza automática del portapapeles según los ajustes del vault.
+    await clipboardManager.copy(secret, appSettings.clipboardClearSeconds);
   }
 
   // Lanza la conexión (SSH/web/VNC). `credentialId = null` ⇒ usa la predeterminada.
-  // Acción explícita por botón (no por doble click).
+  // Acción explícita por botón (no por doble click). Endurecimiento: si la
+  // credencial es SSH por contraseña (sin llave), abre el modal de onboarding de
+  // llave; al aprovisionar recarga las credenciales para reflejar la llave.
   async function connect(credentialId: string | null = null) {
     try {
-      await uc.connectNode(nodeId, credentialId);
+      await requestConnect(nodeId, credentialId, credentials, reloadCredentials);
     } catch (e) {
-      console.error("connect_node falló", e);
+      console.error("connect falló", e);
+    }
+  }
+
+  // URL de administración/web del nodo (propiedad `url_admin` o `url`). Se lee de
+  // los valores vivos para reflejar lo recién tecleado. Habilita el botón "Abrir"
+  // sin depender de credenciales ni de que el tipo sea "conectable".
+  const nodeUrl = $derived(
+    (values.url_admin ?? properties.url_admin ?? "").trim() ||
+      (values.url ?? properties.url ?? "").trim(),
+  );
+
+  async function openUrl() {
+    try {
+      await uc.openNodeUrl(nodeId);
+    } catch (e) {
+      console.error("abrir URL falló", e);
     }
   }
 
@@ -226,90 +290,152 @@
     </button>
   {/if}
 
-  <section>
-    <div class="section-head">
-      <h4>Propiedades</h4>
-      <button class="icon-btn" title="Añadir propiedad" onclick={addPair}>
-        <Icon icon={icons.add} size={15} />
-      </button>
-    </div>
-    {#each spec.properties as p (p.key)}
-      <label class="field">
-        <span>{p.label}</span>
-        {#if p.type === "select"}
-          <select bind:value={values[p.key]} onchange={commitProperties}>
-            <option value="">—</option>
-            {#each p.options ?? [] as opt (opt.value)}
-              <option value={opt.value}>{opt.label}</option>
+  {#if nodeUrl}
+    <button class="connect open-url" title={`Abrir ${nodeUrl}`} onclick={openUrl}>
+      <Icon icon={icons.link} size={15} /> Abrir
+    </button>
+  {/if}
+
+  <Tabs {tabs}>
+    {#snippet children(active)}
+      {#if active === "address"}
+        <section>
+          {#each networkContext.contexts as ctx (ctx.id)}
+            <label class="field" class:active-ctx={ctx.id === networkContext.activeId}>
+              <span>{ctx.name}{ctx.id === networkContext.activeId ? " (activo)" : ""}</span>
+              <input
+                placeholder="IP o host en este contexto"
+                bind:value={endpointValues[ctx.id]}
+                onblur={commitEndpoints}
+              />
+            </label>
+          {/each}
+          <p class="muted">Si un contexto no tiene dirección, se usa el hostname.</p>
+        </section>
+      {:else if active === "properties"}
+        <section>
+          <div class="section-head">
+            <h4>Propiedades</h4>
+            <button class="icon-btn" title="Añadir propiedad" onclick={addPair}>
+              <Icon icon={icons.add} size={15} />
+            </button>
+          </div>
+          {#each specProps as p (p.key)}
+            <label class="field">
+              <span>{p.label}</span>
+              {#if p.type === "select"}
+                <select bind:value={values[p.key]} onchange={commitProperties}>
+                  <option value="">—</option>
+                  {#each p.options ?? [] as opt (opt.value)}
+                    <option value={opt.value}>{opt.label}</option>
+                  {/each}
+                </select>
+              {:else}
+                <input
+                  placeholder={p.placeholder ?? ""}
+                  bind:value={values[p.key]}
+                  onblur={commitProperties}
+                />
+              {/if}
+            </label>
+          {/each}
+
+          {#if extraPairs.length > 0}
+            <h4 class="extra-head">Otras</h4>
+            {#each extraPairs as pair, i (i)}
+              <div class="pair">
+                <input class="key" placeholder="clave" bind:value={pair.key} onblur={commitProperties} />
+                <input class="value" placeholder="valor" bind:value={pair.value} onblur={commitProperties} />
+              </div>
             {/each}
-          </select>
-        {:else}
-          <input
-            placeholder={p.placeholder ?? ""}
-            bind:value={values[p.key]}
-            onblur={commitProperties}
-          />
-        {/if}
-      </label>
-    {/each}
-
-    {#if extraPairs.length > 0}
-      <h4 class="extra-head">Otras</h4>
-      {#each extraPairs as pair, i (i)}
-        <div class="pair">
-          <input class="key" placeholder="clave" bind:value={pair.key} onblur={commitProperties} />
-          <input class="value" placeholder="valor" bind:value={pair.value} onblur={commitProperties} />
-        </div>
-      {/each}
-    {/if}
-  </section>
-
-  <section>
-    <div class="section-head">
-      <h4>Credenciales</h4>
-      <button class="icon-btn" title="Añadir credencial" onclick={openNew}>
-        <Icon icon={icons.add} size={15} />
-      </button>
-    </div>
-
-    {#each credentials as cred (cred.id)}
-      <div class="cred">
-        <div class="cred-top">
-          <span class="badge">{cred.kind.toUpperCase()}</span>
-          {#if cred.isDefault}<span class="default">por defecto</span>{/if}
-          <span class="user">{cred.username ?? "—"}{cred.port ? `:${cred.port}` : ""}</span>
-        </div>
-        <div class="cred-secret">
-          <code>{revealed[cred.id] !== undefined ? (revealed[cred.id] || "(vacío)") : "••••••••"}</code>
-          <button class="icon-btn" title="Mostrar/ocultar" onclick={() => toggleReveal(cred)}>
-            <Icon icon={revealed[cred.id] !== undefined ? icons.eyeOff : icons.eye} size={15} />
-          </button>
-          <button class="icon-btn" title="Copiar" onclick={() => copySecret(cred)}>
-            <Icon icon={icons.copy} size={15} />
-          </button>
-          <button class="icon-btn" title="Editar" onclick={() => openEdit(cred)}>
-            <Icon icon={icons.edit} size={15} />
-          </button>
-          {#if spec.connectable}
-            <button class="icon-btn" title="Conectar con esta credencial" onclick={() => connect(cred.id)}>
-              <Icon icon={icons.connect} size={15} />
-            </button>
           {/if}
-          {#if !cred.isDefault}
-            <button class="icon-btn" title="Marcar por defecto" onclick={() => makeDefault(cred)}>
-              <Icon icon={icons.key} size={15} />
+        </section>
+      {:else if active === "credentials"}
+        <section>
+          <div class="section-head">
+            <h4>Credenciales</h4>
+            <button class="icon-btn" title="Añadir credencial" onclick={openNew}>
+              <Icon icon={icons.add} size={15} />
             </button>
+          </div>
+
+          {#each credentials as cred (cred.id)}
+            <div class="cred">
+              <div class="cred-top">
+                <span class="badge">{cred.kind.toUpperCase()}</span>
+                {#if cred.isDefault}<span class="default">por defecto</span>{/if}
+                <span class="user">{cred.username ?? "—"}{cred.port ? `:${cred.port}` : ""}</span>
+              </div>
+              <div class="cred-secret">
+                <code>{revealed[cred.id] !== undefined ? (revealed[cred.id] || "(vacío)") : "••••••••"}</code>
+                <button class="icon-btn" title="Mostrar/ocultar" onclick={() => toggleReveal(cred)}>
+                  <Icon icon={revealed[cred.id] !== undefined ? icons.eyeOff : icons.eye} size={15} />
+                </button>
+                <button class="icon-btn" title="Copiar" onclick={() => copySecret(cred)}>
+                  <Icon icon={icons.copy} size={15} />
+                </button>
+                <button class="icon-btn" title="Editar" onclick={() => openEdit(cred)}>
+                  <Icon icon={icons.edit} size={15} />
+                </button>
+                {#if spec.connectable}
+                  <button class="icon-btn" title="Conectar con esta credencial" onclick={() => connect(cred.id)}>
+                    <Icon icon={icons.connect} size={15} />
+                  </button>
+                {/if}
+                {#if !cred.isDefault}
+                  <button class="icon-btn" title="Marcar por defecto" onclick={() => makeDefault(cred)}>
+                    <Icon icon={icons.key} size={15} />
+                  </button>
+                {/if}
+                <button class="icon-btn" title="Eliminar" onclick={() => removeCredential(cred)}>
+                  <Icon icon={icons.delete} size={15} />
+                </button>
+              </div>
+            </div>
+          {/each}
+          {#if credentials.length === 0}
+            <p class="muted">Sin credenciales.</p>
           {/if}
-          <button class="icon-btn" title="Eliminar" onclick={() => removeCredential(cred)}>
-            <Icon icon={icons.delete} size={15} />
-          </button>
-        </div>
-      </div>
-    {/each}
-    {#if credentials.length === 0}
-      <p class="muted">Sin credenciales.</p>
-    {/if}
-  </section>
+        </section>
+      {:else if active === "notes"}
+        <section>
+          <div class="section-head">
+            <h4>Notas</h4>
+            <div class="notes-toggle">
+              <button
+                class="icon-btn"
+                class:on={notesEditing}
+                title="Editar (Markdown)"
+                aria-pressed={notesEditing}
+                onclick={() => (notesEditing = true)}
+              >
+                <Icon icon={icons.edit} size={15} />
+              </button>
+              <button
+                class="icon-btn"
+                class:on={!notesEditing}
+                title="Vista"
+                aria-pressed={!notesEditing}
+                onclick={() => { commitProperties(); notesEditing = false; }}
+              >
+                <Icon icon={icons.eye} size={15} />
+              </button>
+            </div>
+          </div>
+          {#if notesEditing}
+            <textarea
+              rows="10"
+              placeholder="Markdown: **negrita**, listas, [enlaces](url)…"
+              bind:value={values.notas}
+              onblur={commitProperties}
+            ></textarea>
+          {:else}
+            <Markdown source={values.notas} empty="Sin notas todavía." />
+          {/if}
+        </section>
+      {/if}
+    {/snippet}
+  </Tabs>
 
   <button class="delete-node" onclick={onDeleteNode}>
     <Icon icon={icons.delete} size={14} /> Eliminar nodo
@@ -367,7 +493,8 @@
     margin-top: var(--karto-space-3);
   }
   input,
-  select {
+  select,
+  textarea {
     background: var(--karto-color-surface);
     border: 1px solid var(--karto-color-border);
     border-radius: var(--karto-radius);
@@ -377,8 +504,13 @@
     font-size: 0.85rem;
     width: 100%;
   }
+  textarea {
+    resize: vertical;
+    line-height: 1.4;
+  }
   input:focus,
-  select:focus {
+  select:focus,
+  textarea:focus {
     outline: none;
     border-color: var(--karto-color-accent);
   }
@@ -401,6 +533,14 @@
   .extra-head {
     margin-top: 0.5rem;
   }
+  /* Contexto activo: su campo de dirección se resalta para saber cuál se usará. */
+  .field.active-ctx span {
+    color: var(--karto-color-accent);
+    opacity: 1;
+  }
+  .field.active-ctx input {
+    border-color: color-mix(in srgb, var(--karto-color-accent) 45%, var(--karto-color-border));
+  }
   .connect {
     display: inline-flex;
     align-items: center;
@@ -421,6 +561,14 @@
   .connect:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+  /* "Abrir" (URL web): acción secundaria neutra, distinta del verde de Conectar. */
+  .open-url {
+    border-color: var(--karto-color-border);
+    background: color-mix(in srgb, var(--karto-color-text) 6%, transparent);
+  }
+  .open-url:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--karto-color-text) 12%, transparent);
   }
   .pair {
     display: grid;
@@ -457,6 +605,15 @@
   }
   .icon-btn:hover {
     background: var(--karto-color-surface);
+    opacity: 1;
+  }
+  .notes-toggle {
+    display: flex;
+    gap: 0.1rem;
+  }
+  .notes-toggle .icon-btn.on {
+    background: var(--karto-color-surface);
+    color: var(--karto-color-accent);
     opacity: 1;
   }
   .cred {

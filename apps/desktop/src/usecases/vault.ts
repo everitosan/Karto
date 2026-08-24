@@ -44,6 +44,40 @@ export function makeVaultUseCases(io: Bridge = bridge) {
     async lock(): Promise<VaultInfo> {
       return io.invoke<VaultInfo>("vault_lock");
     },
+
+    // Cierra el vault por completo (olvida el path) → vuelve a la selección.
+    async close(): Promise<VaultInfo> {
+      return io.invoke<VaultInfo>("vault_close");
+    },
+
+    // Cambia la contraseña maestra (re-cifra el vault). El backend verifica la
+    // actual antes de aplicar; si no coincide, lanza `wrong-password`.
+    async rekey(current: string, next: string): Promise<void> {
+      try {
+        await io.invoke<void>("vault_rekey", { current, new: next });
+      } catch (error) {
+        throw toVaultError(error);
+      }
+    },
+
+    // Escribe una copia de respaldo cifrada del vault en `dest`.
+    async exportBackup(dest: string): Promise<void> {
+      await io.invoke<void>("vault_export", { dest });
+    },
+
+    // Exporta un subconjunto de nodos a un `.karto` nuevo cifrado con `password`.
+    async exportSubset(input: {
+      dest: string;
+      password: string;
+      nodeIds: string[];
+      mapName: string;
+      includeCredentials: boolean;
+      includeFacts: boolean;
+      includeIp: boolean;
+      includeNotes: boolean;
+    }): Promise<void> {
+      await io.invoke<void>("vault_export_subset", input);
+    },
   };
 }
 

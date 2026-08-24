@@ -26,6 +26,15 @@ describe("workspace use cases", () => {
     expect(invoke).toHaveBeenCalledWith("node_set_position", { id: "n1", x: 42, y: 84 });
   });
 
+  it("forwards the query to node_search", async () => {
+    const invoke = vi.fn().mockResolvedValue([]);
+    const uc = makeWorkspaceUseCases({ invoke });
+
+    await uc.searchNodes("web01");
+
+    expect(invoke).toHaveBeenCalledWith("node_search", { query: "web01" });
+  });
+
   it("normalizes optional credential fields to null", async () => {
     const invoke = vi.fn().mockResolvedValue({ id: "c1" });
     const uc = makeWorkspaceUseCases({ invoke });
@@ -54,18 +63,20 @@ describe("workspace use cases", () => {
     expect(invoke).toHaveBeenCalledWith("connect_node", {
       nodeId: "n1",
       credentialId: null,
+      contextId: null,
     });
   });
 
-  it("connects a node with a specific credential id", async () => {
+  it("connects a node with a specific credential id and context", async () => {
     const invoke = vi.fn().mockResolvedValue(undefined);
     const uc = makeWorkspaceUseCases({ invoke });
 
-    await uc.connectNode("n1", "c2");
+    await uc.connectNode("n1", "c2", "vpn");
 
     expect(invoke).toHaveBeenCalledWith("connect_node", {
       nodeId: "n1",
       credentialId: "c2",
+      contextId: "vpn",
     });
   });
 });

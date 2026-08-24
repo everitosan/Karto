@@ -14,6 +14,7 @@ export default defineConfig({
       $usecases: fileURLToPath(new URL("./src/usecases", import.meta.url)),
       $components: fileURLToPath(new URL("./src/components", import.meta.url)),
       $views: fileURLToPath(new URL("./src/Views", import.meta.url)),
+      $config: fileURLToPath(new URL("./src/config", import.meta.url)),
     },
   },
   server: {

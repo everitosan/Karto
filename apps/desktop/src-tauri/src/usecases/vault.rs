@@ -58,12 +58,75 @@ impl<S: VaultStore> VaultService<S> {
         self.status()
     }
 
+    /// Cierra el vault por completo: olvida la conexión **y** el path, volviendo
+    /// al estado `NoVault` (la UI regresa a la selección de vaults). A diferencia
+    /// de `lock`, no deja el archivo "recordado" para re-desbloquear.
+    pub fn close(&self) -> VaultInfo {
+        {
+            let mut session = self.session.lock().unwrap();
+            session.conn = None;
+            session.path = None;
+        }
+        self.status()
+    }
+
     /// Punto único de acceso a la conexión descifrada para el resto de casos de
     /// uso (repos de nodos, credenciales, etc.); falla si el vault está bloqueado.
     pub fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> AppResult<T>) -> AppResult<T> {
         let session = self.session.lock().unwrap();
         let conn = session.conn.as_ref().ok_or(AppError::NoVaultOpen)?;
         f(conn)
+    }
+
+    /// Cambia la contraseña maestra re-cifrando el vault en sitio (`PRAGMA rekey`).
+    /// Verifica primero la contraseña actual abriendo una conexión efímera al
+    /// mismo archivo; si no coincide, aborta sin tocar nada.
+    pub fn rekey(&self, current: &str, new: &str) -> AppResult<()> {
+        let session = self.session.lock().unwrap();
+        let path = session.path.clone().ok_or(AppError::NoVaultOpen)?;
+        // Verificación: si la contraseña actual es incorrecta, esto falla.
+        drop(self.store.open(&path, current)?);
+        let conn = session.conn.as_ref().ok_or(AppError::NoVaultOpen)?;
+        conn.pragma_update(None, "rekey", new)?;
+        Ok(())
+    }
+
+    /// Escribe una copia de respaldo del vault (cifrada con la clave actual) en
+    /// `dest` mediante `VACUUM INTO`. Falla si el destino ya existe.
+    pub fn export(&self, dest: &Path) -> AppResult<()> {
+        if dest.exists() {
+            return Err(AppError::Other("ya existe un archivo en esa ruta".into()));
+        }
+        self.with_conn(|conn| {
+            // VACUUM INTO no admite parámetros ligados; escapamos las comillas.
+            let dest_sql = dest.to_string_lossy().replace('\'', "''");
+            conn.execute_batch(&format!("VACUUM INTO '{dest_sql}';"))?;
+            Ok(())
+        })
+    }
+
+    /// Exporta un subconjunto de nodos del vault abierto a un `.karto` nuevo,
+    /// cifrado con `password` (distinta de la maestra, para compartir). Crea el
+    /// destino con el store (migrado) y copia la selección con `copy_subset`;
+    /// si la copia falla, borra el archivo a medias.
+    pub fn export_subset(
+        &self,
+        dest: &Path,
+        password: &str,
+        node_ids: &[String],
+        map_name: &str,
+        opts: crate::usecases::export_subset::ExportOptions,
+    ) -> AppResult<()> {
+        let session = self.session.lock().unwrap();
+        let src = session.conn.as_ref().ok_or(AppError::NoVaultOpen)?;
+        let dest_conn = self.store.create(dest, password)?;
+        let result =
+            crate::usecases::export_subset::copy_subset(src, &dest_conn, node_ids, map_name, opts);
+        if result.is_err() {
+            drop(dest_conn);
+            let _ = std::fs::remove_file(dest);
+        }
+        result
     }
 
     fn set_open(&self, path: &Path, conn: Connection) {
@@ -134,6 +197,17 @@ mod tests {
     }
 
     #[test]
+    fn close_forgets_path_and_returns_to_no_vault() {
+        let service = VaultService::new(FakeStore::new());
+        let path = PathBuf::from("/tmp/demo.karto");
+        service.create(&path, "s3cret!!").unwrap();
+
+        // Cerrar (no bloquear) olvida también el path → NoVault, no Locked.
+        assert_eq!(service.close().status, VaultStatus::NoVault);
+        assert_eq!(service.status().path, None);
+    }
+
+    #[test]
     fn unlock_with_wrong_password_fails_and_stays_locked() {
         let service = VaultService::new(FakeStore::new());
         let path = PathBuf::from("/tmp/demo.karto");
@@ -152,6 +226,81 @@ mod tests {
         let service = VaultService::new(FakeStore::new());
         let err = service.with_conn(|_| Ok(())).unwrap_err();
         assert!(matches!(err, AppError::NoVaultOpen));
+    }
+
+    #[test]
+    fn rekey_rejects_wrong_current_password() {
+        let service = VaultService::new(FakeStore::new());
+        let path = PathBuf::from("/tmp/demo.karto");
+        service.create(&path, "old-pass").unwrap();
+
+        // Contraseña actual incorrecta → aborta sin re-cifrar.
+        assert!(matches!(
+            service.rekey("wrong", "new-pass").unwrap_err(),
+            AppError::WrongPassword
+        ));
+    }
+
+    /// El `PRAGMA rekey` real requiere un vault cifrado de verdad, así que este
+    /// caso usa el store SQLCipher sobre un archivo temporal: re-cifra y confirma
+    /// que solo la contraseña nueva reabre.
+    #[test]
+    fn rekey_reencrypts_with_real_sqlcipher() {
+        use crate::infra::SqlcipherStore;
+
+        let dir = std::env::temp_dir().join(format!("karto-rekey-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("v.karto");
+        let _ = std::fs::remove_file(&path);
+
+        let service = VaultService::new(SqlcipherStore::new());
+        service.create(&path, "old-pass").unwrap();
+
+        service.rekey("old-pass", "new-pass").unwrap();
+        service.lock();
+
+        // La contraseña vieja ya no sirve; la nueva sí.
+        assert!(matches!(
+            service.unlock(&path, "old-pass").unwrap_err(),
+            AppError::WrongPassword
+        ));
+        assert_eq!(
+            service.unlock(&path, "new-pass").unwrap().status,
+            VaultStatus::Unlocked
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn rekey_fails_when_no_vault_open() {
+        let service = VaultService::new(FakeStore::new());
+        assert!(matches!(
+            service.rekey("a", "b").unwrap_err(),
+            AppError::NoVaultOpen
+        ));
+    }
+
+    #[test]
+    fn export_writes_file_and_refuses_existing_dest() {
+        let service = VaultService::new(FakeStore::new());
+        service.create(&PathBuf::from("/tmp/demo.karto"), "p").unwrap();
+
+        let dir = std::env::temp_dir().join(format!("karto-export-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dest = dir.join("backup.karto");
+        let _ = std::fs::remove_file(&dest);
+
+        service.export(&dest).unwrap();
+        assert!(dest.exists());
+
+        // Con el destino ya existente, se niega.
+        assert!(matches!(
+            service.export(&dest).unwrap_err(),
+            AppError::Other(_)
+        ));
+
+        let _ = std::fs::remove_file(&dest);
     }
 
     #[test]

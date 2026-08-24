@@ -6,17 +6,21 @@
   import type { Credential, NodeKind } from "$domain/infra";
   import { NODE_CATALOG } from "$domain/infra";
   import { workspaceUseCases as uc } from "$usecases/workspace";
+  import { requestConnect } from "./connectFlow.svelte";
+  import { checkNode } from "./nodeHealth.svelte";
 
   interface Props {
     x: number;
     y: number;
     nodeId: string;
     kind: NodeKind;
+    /** ¿El nodo tiene objetivo sondeable (hostname/URL/endpoint)? */
+    canProbe: boolean;
     onDelete: () => void;
     onClose: () => void;
   }
 
-  let { x, y, nodeId, kind, onDelete, onClose }: Props = $props();
+  let { x, y, nodeId, kind, canProbe, onDelete, onClose }: Props = $props();
 
   const connectable = $derived(NODE_CATALOG[kind]?.connectable ?? false);
 
@@ -34,9 +38,11 @@
   }
 
   function connect(credentialId: string | null) {
-    // Despacha el comando ANTES de cerrar (cerrar destruye este componente).
-    uc.connectNode(nodeId, credentialId).catch((e: unknown) => {
-      console.error("connect_node falló", e);
+    // `requestConnect` decide de forma síncrona si conecta directo o abre el
+    // modal de onboarding (guardado en el store compartido), así que podemos
+    // cerrar el menú a continuación sin perder la acción.
+    requestConnect(nodeId, credentialId, credentials).catch((e: unknown) => {
+      console.error("connect falló", e);
       const msg = typeof e === "string" ? e : e instanceof Error ? e.message : "No se pudo conectar";
       alert(msg);
     });
@@ -70,6 +76,13 @@
     {:else}
       <span class="empty">Sin credenciales</span>
     {/if}
+    <div class="sep"></div>
+  {/if}
+
+  {#if kind !== "zone" && canProbe}
+    <button class="item" role="menuitem" onclick={() => { void checkNode(nodeId); onClose(); }}>
+      <Icon icon={icons.connect} size={15} /> Comprobar estado
+    </button>
     <div class="sep"></div>
   {/if}
 

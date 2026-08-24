@@ -185,7 +185,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: Router01Icon,
     connectable: true,
     properties: [
-      t("ip", "IP de gestión"),
       t("modelo", "Marca / modelo"),
       t("firmware", "Firmware"),
       t("nat", "NAT (activo/reglas)"),
@@ -201,7 +200,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: DistributionIcon,
     connectable: true,
     properties: [
-      t("ip", "IP de gestión"),
       t("puertos", "Puertos (usados/total)"),
       t("vlans", "VLANs"),
       t("modelo", "Marca / modelo"),
@@ -215,7 +213,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: Wifi01Icon,
     connectable: true,
     properties: [
-      t("ip", "IP de gestión"),
       t("ssid", "SSID"),
       t("banda", "Banda / estándar"),
       t("controlador", "Controlador"),
@@ -229,7 +226,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: SatelliteIcon,
     connectable: true,
     properties: [
-      t("ip", "IP del servicio"),
       t("rol", "Rol (autoritativo/recursivo)"),
       t("zonas", "Zonas / dominios"),
       t("upstreams", "Forwarders"),
@@ -243,7 +239,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: ExchangeIcon,
     connectable: true,
     properties: [
-      t("ip", "IP del servicio"),
       t("rango", "Scope / rango"),
       t("gateway", "Gateway entregado"),
       notas,
@@ -315,7 +310,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: FirewallIcon,
     connectable: true,
     properties: [
-      t("ip", "IP de gestión"),
       t("modelo", "Marca / modelo"),
       t("firmware", "Firmware"),
       t("zonas", "Zonas / interfaces"),
@@ -363,7 +357,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: SquareLock02Icon,
     connectable: true,
     properties: [
-      t("ip", "IP"),
       t("os", "SO + versión"),
       t("redes", "Redes/hosts destino"),
       t("metodo", "Método (SSH/MFA)"),
@@ -430,7 +423,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: ServerStack01Icon,
     connectable: true,
     properties: [
-      t("ip", "IP"),
       t("hostname", "Hostname / FQDN"),
       t("os", "SO + versión"),
       t("recursos", "CPU / RAM / disco"),
@@ -446,7 +438,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: CpuIcon,
     connectable: true,
     properties: [
-      t("ip", "IP"),
       t("hostname", "Hostname / FQDN"),
       t("host_padre", "Host / hypervisor padre"),
       t("os", "SO + versión"),
@@ -467,7 +458,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
         { value: "esxi", label: "VMware ESXi" },
         { value: "hyperv", label: "Hyper-V" },
       ]),
-      t("ip", "IP"),
       t("url_admin", "URL de gestión"),
       t("capacidad", "Capacidad"),
       notas,
@@ -534,7 +524,7 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     label: "Genérico",
     icon: ComputerIcon,
     connectable: true,
-    properties: [t("ip", "IP"), t("hostname", "Hostname"), notas],
+    properties: [t("hostname", "Hostname"), notas],
   },
 
   // ── Aplicación ─────────────────────────────────────────────────────────
@@ -584,6 +574,7 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
         { value: "nginx", label: "nginx", icon: "nginx-original" },
         { value: "apache", label: "Apache", icon: "apache-plain" },
       ]),
+      t("url", "URL", "https://sitio.ejemplo.com"),
       t("sitios", "Sitios / vhosts"),
       t("puertos", "Puertos (80/443)"),
       notas,
@@ -598,8 +589,9 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     iconProperty: "framework",
     properties: [
       sel("framework", "Runtime / framework", APP_FRAMEWORKS),
+      t("url", "URL", "https://app.ejemplo.com"),
       t("version", "Versión"),
-      t("repo", "Repositorio / URL"),
+      t("repo", "Repositorio"),
       t("puerto", "Puerto"),
       t("dependencias", "Dependencias (BD/cache/colas)"),
       notas,
@@ -643,7 +635,7 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
         { value: "timeseries", label: "Time-series" },
       ]),
       t("version", "Versión"),
-      t("host", "Host:puerto"),
+      t("hostname", "Hostname / FQDN"),
       t("instancia", "Nombre BD / instancia"),
       t("replicacion", "Replicación / HA"),
       t("backup", "Backup (destino/frecuencia)"),
@@ -673,7 +665,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: HardDriveIcon,
     connectable: true,
     properties: [
-      t("ip", "IP"),
       t("protocolo", "Protocolo (NFS/SMB)"),
       t("capacidad", "Capacidad"),
       notas,
@@ -707,7 +698,7 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
         { value: "sqs", label: "Amazon SQS", icon: "amazonwebservices-plain-wordmark" },
         { value: "activemq", label: "ActiveMQ" },
       ]),
-      t("host", "Host:puerto"),
+      t("hostname", "Hostname / FQDN"),
       t("colas", "Colas / exchanges"),
       notas,
     ],
@@ -835,7 +826,6 @@ export const NODE_CATALOG: Record<NodeKind, NodeSpec> = {
     icon: LaptopIcon,
     connectable: true,
     properties: [
-      t("ip", "IP"),
       t("os", "SO"),
       t("usuario", "Usuario asignado"),
       notas,

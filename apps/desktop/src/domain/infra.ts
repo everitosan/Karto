@@ -3,8 +3,8 @@
 // `camelCase` del backend Rust.
 //
 // El catálogo de tipos de nodo (categorías, etiquetas, propiedades e iconos)
-// es la fuente compartida en `@karto/ui`; aquí solo se re-exporta.
-export type { NodeKind, NodeCategory } from "@karto/ui";
+// es la fuente compartida en `@karto/catalog`; aquí solo se re-exporta.
+export type { NodeKind, NodeCategory } from "@karto/catalog";
 export {
   NODE_KINDS,
   NODE_KIND_LABELS,
@@ -13,9 +13,9 @@ export {
   CATEGORY_LABELS,
   nodesByCategory,
   resolveNodeIcon,
-} from "@karto/ui";
+} from "@karto/catalog";
 
-import type { NodeKind } from "@karto/ui";
+import type { NodeKind } from "@karto/catalog";
 
 export type CredentialKind = "ssh" | "rdp" | "vnc" | "web" | "db";
 
@@ -46,6 +46,23 @@ export interface InfraNode {
   /** Zona contenedora. `x`/`y` son relativos al padre si está presente. */
   parentId: string | null;
   properties: Record<string, string>;
+  /**
+   * Dirección del nodo por contexto de acceso (`contextId` → dirección). La
+   * dirección efectiva depende del contexto activo; el `hostname` de
+   * `properties` es el respaldo estable si no hay endpoint para ese contexto.
+   */
+  endpoints: Record<string, string>;
+}
+
+/**
+ * Contexto de acceso (punto de vista de red): "Oficina", "VPN", "Público"…
+ * Selecciona qué dirección de cada nodo se usa al conectar. El catálogo vive en
+ * el vault; el contexto *activo* es estado local de cada equipo.
+ */
+export interface AccessContext {
+  id: string;
+  name: string;
+  position: number;
 }
 
 export interface InfraEdge {
@@ -60,6 +77,41 @@ export interface InfraEdge {
 export interface Graph {
   nodes: InfraNode[];
   edges: InfraEdge[];
+}
+
+/** Estado de salud de un nodo tras la sonda TCP. */
+export type HealthState = "reachable" | "unreachable" | "unresolved" | "noTarget";
+export interface HealthStatus {
+  state: HealthState;
+  port: number;
+  latencyMs: number | null;
+}
+
+/** Acierto de la búsqueda global: un nodo y en qué diagrama vive. */
+export interface SearchHit {
+  nodeId: string;
+  mapId: string;
+  mapName: string;
+  kind: NodeKind;
+  label: string;
+  /** Campo que casó, legible: "etiqueta", "hostname · web01", "IP · 10.0.0.5". */
+  matched: string;
+}
+
+/** Host leído de `~/.ssh/config` en la vista previa de importación. */
+export interface ImportedHost {
+  alias: string;
+  hostname: string | null;
+  user: string | null;
+  port: number | null;
+  identityFile: string | null;
+}
+
+/** Archivo candidato a importar hallado bajo `~/.ssh` (config y `config.d/**`). */
+export interface CandidateFile {
+  path: string;
+  name: string;
+  hostCount: number;
 }
 
 export interface Credential {

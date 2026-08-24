@@ -1,4 +1,5 @@
-// Vocabulario de tipos compartido por la UI.
+// Vocabulario de tipos del catálogo de nodos, compartido entre app, storybook y
+// landing. Framework-agnóstico (sin dependencias de UI).
 
 /** Categorías del catálogo de nodos (agrupan los tipos en la paleta). */
 export type NodeCategory =

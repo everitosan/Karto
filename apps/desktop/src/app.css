@@ -16,7 +16,9 @@ html {
 
 body {
   font-family: var(--karto-font-body);
-  background: var(--karto-bg);
-  background-attachment: fixed;
+  /* Ventana sin decoración + transparente: el fondo (y las esquinas redondeadas)
+     los pinta `.app-frame` en App.svelte; html/body quedan transparentes para
+     que el radio recorte contra el escritorio en vez de un fondo cuadrado. */
+  background: transparent;
   color: var(--karto-color-text);
 }

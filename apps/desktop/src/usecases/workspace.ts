@@ -3,13 +3,18 @@
 // del backend Rust. Sin dependencias de Svelte; el puente Tauri es inyectable
 // para poder testear con un mock.
 import type {
+  AccessContext,
+  CandidateFile,
   Credential,
   Folder,
   Graph,
+  HealthStatus,
+  ImportedHost,
   InfraEdge,
   InfraMap,
   InfraNode,
   NodeKind,
+  SearchHit,
 } from "$domain/infra";
 import { bridge, type Bridge } from "./tauri";
 
@@ -53,6 +58,16 @@ export function makeWorkspaceUseCases(io: Bridge = bridge) {
 
     // --- Grafo ---
     loadGraph: (mapId: string) => io.invoke<Graph>("graph_load", { mapId }),
+    searchNodes: (query: string) => io.invoke<SearchHit[]>("node_search", { query }),
+    // Escribe la imagen exportada (bytes) en la ruta elegida.
+    exportWrite: (path: string, data: number[]) =>
+      io.invoke<void>("export_write", { path, data }),
+    // Lee el sondeo del equipo tras conectar (null si aún no está listo).
+    pollFacts: (nodeId: string) =>
+      io.invoke<Record<string, string> | null>("facts_poll", { nodeId }),
+    // Comprueba (TCP) si el nodo responde en su puerto de servicio.
+    checkHealth: (nodeId: string, contextId: string | null) =>
+      io.invoke<HealthStatus>("node_health", { nodeId, contextId }),
     createNode: (
       mapId: string,
       kind: NodeKind,
@@ -68,7 +83,18 @@ export function makeWorkspaceUseCases(io: Bridge = bridge) {
       io.invoke<void>("node_rename", { id, label }),
     setNodeProperties: (id: string, properties: Record<string, string>) =>
       io.invoke<void>("node_set_properties", { id, properties }),
+    // Reemplaza las direcciones por contexto del nodo (`contextId` → dirección).
+    setNodeEndpoints: (id: string, endpoints: Record<string, string>) =>
+      io.invoke<void>("node_set_endpoints", { id, endpoints }),
     deleteNode: (id: string) => io.invoke<void>("node_delete", { id }),
+
+    // --- Contextos de acceso (puntos de vista de red) ---
+    listContexts: () => io.invoke<AccessContext[]>("context_list"),
+    createContext: (name: string) =>
+      io.invoke<AccessContext>("context_create", { name }),
+    renameContext: (id: string, name: string) =>
+      io.invoke<void>("context_rename", { id, name }),
+    deleteContext: (id: string) => io.invoke<void>("context_delete", { id }),
     createEdge: (
       mapId: string,
       sourceId: string,
@@ -104,8 +130,47 @@ export function makeWorkspaceUseCases(io: Bridge = bridge) {
     // --- Conexión ---
     // Lanza la conexión del nodo. Con `credentialId` nulo usa la predeterminada.
     // El secreto nunca viaja aquí: lo revela y lo consume el backend.
-    connectNode: (nodeId: string, credentialId: string | null = null) =>
-      io.invoke<void>("connect_node", { nodeId, credentialId }),
+    // `contextId` selecciona la dirección del nodo según el punto de vista de red
+    // activo (oficina/VPN/…); nulo ⇒ el backend cae al hostname de respaldo.
+    connectNode: (
+      nodeId: string,
+      credentialId: string | null = null,
+      contextId: string | null = null,
+    ) => io.invoke<void>("connect_node", { nodeId, credentialId, contextId }),
+
+    // Abre en el navegador la URL de administración del nodo (propiedad
+    // `url_admin`/`url`). No usa credenciales: abrir un enlace no requiere secreto.
+    openNodeUrl: (nodeId: string) => io.invoke<void>("open_node_url", { nodeId }),
+
+    // Aprovisiona acceso por llave SSH para una credencial de contraseña: genera
+    // la llave, la copia al servidor con ssh-copy-id y encadena la conexión por
+    // llave (el usuario teclea la contraseña una vez). `setDefaultKey` fija la
+    // llave como método por defecto; `storeInVault` guarda la privada en el vault.
+    provisionSshKey: (
+      nodeId: string,
+      credentialId: string,
+      setDefaultKey: boolean,
+      storeInVault: boolean,
+      contextId: string | null = null,
+    ) =>
+      io.invoke<string>("ssh_provision_key", {
+        nodeId,
+        credentialId,
+        contextId,
+        setDefaultKey,
+        storeInVault,
+      }),
+
+    // --- Importación SSH ---
+    // Candidatos a importar hallados bajo `~/.ssh` (config y config.d/**).
+    sshImportCandidates: () =>
+      io.invoke<CandidateFile[]>("ssh_import_candidates"),
+    // Parsea un archivo de config SSH concreto (sugerencia o soltado).
+    sshImportParseFile: (path: string) =>
+      io.invoke<ImportedHost[]>("ssh_import_parse_file", { path }),
+    // Crea un nodo (con credencial SSH) por host en el diagrama destino.
+    sshImportHosts: (mapId: string, hosts: ImportedHost[]) =>
+      io.invoke<InfraNode[]>("ssh_import_hosts", { mapId, hosts }),
   };
 }
 

@@ -1,10 +1,11 @@
 <script lang="ts">
   // Árbol de carpetas y diagramas (Fase 2). Componente local a la vista
   // Workspace. Soporta crear, renombrar, anidar y mover con drag & drop.
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { Icon, icons } from "@karto/ui";
   import type { Folder, InfraMap } from "$domain/infra";
   import { workspaceUseCases as uc } from "$usecases/workspace";
+  import SshImportModal from "./SshImportModal.svelte";
 
   interface Props {
     selectedMapId: string | null;
@@ -15,6 +16,7 @@
   let folders = $state<Folder[]>([]);
   let maps = $state<InfraMap[]>([]);
   let loaded = $state(false);
+  let importOpen = $state(false);
 
   // Edición inline (renombrar) y arrastre.
   let editing = $state<{ id: string; kind: "folder" | "map" } | null>(null);
@@ -25,24 +27,52 @@
   type Zone = "before" | "after" | "inside";
   let dropHint = $state<{ id: string; zone: Zone } | "root" | null>(null);
 
-  // Acordeón: carpetas colapsadas (vacío = todas abiertas por defecto).
-  let collapsed = $state<Set<string>>(new Set());
+  // Acordeón: carpetas colapsadas (vacío = todas abiertas por defecto). El
+  // estado de abierto/cerrado es chrome de navegación atado a este equipo, así
+  // que se persiste en localStorage (no viaja con el vault; los ids de carpeta
+  // son aleatorios y únicos, sin colisión entre vaults).
+  const COLLAPSED_KEY = "karto.collapsedFolders";
+
+  function readCollapsed(): Set<string> {
+    try {
+      const raw = localStorage.getItem(COLLAPSED_KEY);
+      if (raw) return new Set(JSON.parse(raw) as string[]);
+    } catch {
+      // localStorage no disponible o JSON inválido → todas abiertas.
+    }
+    return new Set();
+  }
+
+  function writeCollapsed(ids: Set<string>): void {
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...ids]));
+    } catch {
+      // localStorage no disponible: el estado vive solo en memoria esta sesión.
+    }
+  }
+
+  let collapsed = $state<Set<string>>(readCollapsed());
   const isOpen = (id: string) => !collapsed.has(id);
   const hasChildren = (id: string) =>
     childFolders(id).length > 0 || folderMaps(id).length > 0;
+
+  function setCollapsed(next: Set<string>) {
+    collapsed = next;
+    writeCollapsed(next);
+  }
 
   function toggleFolder(id: string) {
     const next = new Set(collapsed);
     if (next.has(id)) next.delete(id);
     else next.add(id);
-    collapsed = next;
+    setCollapsed(next);
   }
 
   function openFolder(id: string) {
     if (collapsed.has(id)) {
       const next = new Set(collapsed);
       next.delete(id);
-      collapsed = next;
+      setCollapsed(next);
     }
   }
 
@@ -51,6 +81,10 @@
   async function reload() {
     [folders, maps] = await Promise.all([uc.listFolders(), uc.listMaps()]);
     loaded = true;
+    // Poda ids colapsados de carpetas ya inexistentes (borradas/movidas fuera).
+    const alive = new Set(folders.map((f) => f.id));
+    const pruned = new Set([...collapsed].filter((id) => alive.has(id)));
+    if (pruned.size !== collapsed.size) setCollapsed(pruned);
   }
 
   const childFolders = (parentId: string | null) =>
@@ -266,6 +300,17 @@
     await moveInto(null);
     await reload();
   }
+
+  // Tras importar hosts SSH: refresca el árbol y abre el diagrama destino.
+  // Se fuerza el remonte del canvas (null → tick → id) para que recargue el
+  // grafo aunque el destino ya fuera el diagrama seleccionado.
+  async function onImported(mapId: string) {
+    importOpen = false;
+    await reload();
+    selectedMapId = null;
+    await tick();
+    selectedMapId = mapId;
+  }
 </script>
 
 <aside class="sidebar">
@@ -278,6 +323,10 @@
       </button>
       <button title="Nuevo diagrama" onclick={() => addMap(null)}>
         <Icon icon={icons.diagram} size={15} />
+        <Icon icon={icons.add} size={11} />
+      </button>
+      <button title="Importar desde ~/.ssh/config" onclick={() => (importOpen = true)}>
+        <Icon icon={icons.terminal} size={15} />
         <Icon icon={icons.add} size={11} />
       </button>
     </div>
@@ -307,6 +356,14 @@
     {/each}
   </div>
 </aside>
+
+<SshImportModal
+  open={importOpen}
+  {maps}
+  {selectedMapId}
+  onClose={() => (importOpen = false)}
+  {onImported}
+/>
 
 {#snippet folderRow(folder: Folder, depth: number)}
   <div
@@ -437,7 +494,6 @@
     /* Fondo opaco: al colapsar, el panel se muestra como overlay sobre el
        canvas y no debe transparentar lo que hay detrás. */
     background: var(--karto-color-bg);
-    border-right: 1px solid var(--karto-color-border);
     overflow-y: auto;
     display: flex;
     flex-direction: column;

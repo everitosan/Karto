@@ -7,9 +7,10 @@
   interface Props {
     path: string | null;
     onUnlocked: (info: VaultInfo) => void;
+    onCancel: () => void;
   }
 
-  let { path, onUnlocked }: Props = $props();
+  let { path, onUnlocked, onCancel }: Props = $props();
 
   let password = $state("");
   let error = $state<string | null>(null);
@@ -43,9 +44,12 @@
     <p class="file"><Icon icon={icons.lock} size={16} /> {fileName}</p>
     <PasswordField label="Contraseña maestra" bind:value={password} autofocus />
     {#if error}<p class="error">{error}</p>{/if}
-    <Button type="submit" disabled={busy || password.length === 0}>
-      {busy ? "Desbloqueando…" : "Desbloquear"}
-    </Button>
+    <div class="actions">
+      <Button type="button" variant="ghost" onclick={onCancel} disabled={busy}>Volver</Button>
+      <Button type="submit" disabled={busy || password.length === 0}>
+        {busy ? "Desbloqueando…" : "Desbloquear"}
+      </Button>
+    </div>
   </form>
 </main>
 
@@ -71,6 +75,11 @@
     margin: 0 0 1.5rem;
     color: var(--karto-color-text-muted);
     font-size: 0.9rem;
+  }
+  .actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
   }
   .error {
     color: #fca5a5;

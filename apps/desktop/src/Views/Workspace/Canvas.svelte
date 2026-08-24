@@ -3,6 +3,7 @@
   // monta el editor por diagrama. Componente local a la vista Workspace.
   import { SvelteFlowProvider } from "@xyflow/svelte";
   import FlowEditor from "./canvas/FlowEditor.svelte";
+  import KeyOnboardingModal from "./canvas/KeyOnboardingModal.svelte";
 
   interface Props {
     mapId: string | null;
@@ -24,6 +25,10 @@
       Selecciona o crea un diagrama en la barra lateral.
     </div>
   {/if}
+
+  <!-- Modal de onboarding de llave SSH: se abre desde el panel o el menú
+       contextual vía el store compartido de connectFlow. -->
+  <KeyOnboardingModal />
 </section>
 
 <style>

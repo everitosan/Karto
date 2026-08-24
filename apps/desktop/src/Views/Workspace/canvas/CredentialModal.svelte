@@ -1,8 +1,9 @@
 <script lang="ts">
   // Modal para agregar/editar una credencial de un nodo. Mantiene una copia
   // local del formulario; el guardado real (upsert) lo hace el consumidor.
-  import { Modal, Button } from "@karto/ui";
+  import { Modal, Button, Checkbox, FilePicker } from "@karto/ui";
   import type { CredentialKind } from "$domain/infra";
+  import { pickSshKeyPath } from "$usecases/dialog";
 
   export interface CredentialDraft {
     id: string | null;
@@ -60,11 +61,22 @@
       saving = false;
     }
   }
+
+  // Ajusta la altura del textarea a su contenido: se re-mide cada vez que
+  // cambia `value` (incluido al resembrar el form al abrir).
+  function autosize(node: HTMLTextAreaElement, _value: string) {
+    const fit = () => {
+      node.style.height = "auto";
+      node.style.height = `${node.scrollHeight}px`;
+    };
+    fit();
+    return { update: fit };
+  }
 </script>
 
 <Modal {open} title={editing ? "Editar credencial" : "Agregar credencial"} {onClose}>
   <div class="form">
-    <label class="field">
+    <label class="field span-2">
       <span>Tipo</span>
       <select bind:value={form.kind}>
         {#each credKinds as k (k)}<option value={k}>{k.toUpperCase()}</option>{/each}
@@ -77,51 +89,58 @@
     </label>
 
     <label class="field">
-      <span>Secreto</span>
-      <input placeholder="contraseña / passphrase" type="password" bind:value={form.secret} />
-    </label>
-
-    <label class="field">
       <span>Puerto</span>
       <input placeholder="p. ej. 22" inputmode="numeric" bind:value={form.port} />
+    </label>
+
+    <label class="field" class:span-2={!showKeyPath}>
+      <span>Contraseña</span>
+      <input placeholder="contraseña / passphrase" type="password" bind:value={form.secret} />
     </label>
 
     {#if showKeyPath}
       <label class="field">
         <span>Ruta de la llave</span>
-        <input placeholder="~/.ssh/id_ed25519 (opcional)" bind:value={form.keyPath} />
+        <FilePicker
+          bind:value={form.keyPath}
+          placeholder="~/.ssh/id_ed25519 (opcional)"
+          onBrowse={pickSshKeyPath}
+        />
       </label>
 
-      <label class="field">
-        <span>Opciones SSH extra</span>
+      <label class="field span-2">
+        <span>Opciones SSH para la conexión</span>
         <textarea
           rows="3"
           placeholder={"Una por línea, p. ej.:\nServerAliveInterval=60\nConnectTimeout=10\nProxyJump bastion"}
           bind:value={form.options}
+          use:autosize={form.options}
         ></textarea>
         <small class="hint">Cada línea se pasa como <code>-o &lt;opción&gt;</code> a ssh.</small>
       </label>
     {/if}
 
-    <label class="checkbox">
-      <input type="checkbox" bind:checked={form.isDefault} />
-      Usar como predeterminada
-    </label>
+    <div class="checkbox span-2">
+      <Checkbox bind:checked={form.isDefault}>Usar como predeterminada</Checkbox>
+    </div>
   </div>
 
   {#snippet footer()}
-    <Button variant="secondary" onclick={onClose}>Cancelar</Button>
-    <Button variant="primary" disabled={saving} onclick={save}>
-      {saving ? "Guardando…" : "Guardar"}
-    </Button>
+    <div class="footer-actions">
+      <Button variant="secondary" onclick={onClose}>Cancelar</Button>
+      <Button variant="primary" disabled={saving} onclick={save}>
+        {saving ? "Guardando…" : "Aceptar"}
+      </Button>
+    </div>
   {/snippet}
 </Modal>
 
 <style>
   .form {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 0.85rem;
+    width: 100%;
   }
   .field {
     display: flex;
@@ -129,6 +148,15 @@
     gap: var(--karto-space-2);
     font-size: 0.78rem;
     opacity: 0.9;
+    min-width: 0;
+  }
+  .span-2 {
+    grid-column: 1 / -1;
+  }
+  .footer-actions {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
   }
   input,
   select,
@@ -143,7 +171,10 @@
     width: 100%;
   }
   textarea {
-    resize: vertical;
+    resize: none;
+    overflow: hidden;
+    min-height: 0;
+    padding-block: calc(0.45rem + var(--karto-space-1));
     font-family: var(--karto-font-mono, monospace);
   }
   input:focus,
@@ -176,12 +207,6 @@
     font-family: var(--karto-font-mono, monospace);
   }
   .checkbox {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
     font-size: 0.85rem;
-  }
-  .checkbox input {
-    width: auto;
   }
 </style>

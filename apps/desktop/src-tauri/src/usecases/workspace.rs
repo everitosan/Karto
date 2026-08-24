@@ -7,7 +7,7 @@
 //! el puerto del dominio ya expone `rusqlite::Connection`). Cada función es
 //! pequeña y testeable de forma aislada.
 
-use crate::domain::{Credential, Edge, Folder, Graph, Map, Node};
+use crate::domain::{Credential, Edge, Folder, Graph, Map, Node, SearchHit};
 use crate::error::AppResult;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
@@ -185,6 +185,7 @@ pub fn graph_load(conn: &Connection, map_id: &str) -> AppResult<Graph> {
                 y: r.get(4)?,
                 parent_id: r.get(5)?,
                 properties: HashMap::new(),
+                endpoints: HashMap::new(),
             })
         })?
         .collect::<Result<_, _>>()?;
@@ -209,6 +210,32 @@ pub fn graph_load(conn: &Connection, map_id: &str) -> AppResult<Graph> {
     for node in &mut nodes {
         if let Some(p) = props.remove(&node.id) {
             node.properties = p;
+        }
+    }
+
+    // Endpoints (dirección por contexto) de todos los nodos del mapa.
+    let mut ep_stmt = conn.prepare(
+        "SELECT e.node_id, e.context_id, e.address FROM node_endpoints e \
+         JOIN nodes n ON n.id = e.node_id WHERE n.map_id = ?1",
+    )?;
+    let mut endpoints: HashMap<String, HashMap<String, String>> = HashMap::new();
+    let ep_rows = ep_stmt.query_map(params![map_id], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
+    for row in ep_rows {
+        let (node_id, context_id, address) = row?;
+        endpoints
+            .entry(node_id)
+            .or_default()
+            .insert(context_id, address);
+    }
+    for node in &mut nodes {
+        if let Some(e) = endpoints.remove(&node.id) {
+            node.endpoints = e;
         }
     }
 
@@ -252,6 +279,7 @@ pub fn node_create(
         y,
         parent_id: None,
         properties: HashMap::new(),
+        endpoints: HashMap::new(),
     })
 }
 
@@ -291,6 +319,27 @@ pub fn node_set_properties(
         conn.execute(
             "INSERT INTO node_properties (node_id, key, value) VALUES (?1, ?2, ?3)",
             params![id, key, value],
+        )?;
+    }
+    Ok(())
+}
+
+/// Reemplaza el conjunto completo de endpoints de un nodo (dirección por
+/// contexto): borra los actuales e inserta los recibidos. Las direcciones vacías
+/// se ignoran (equivalen a "sin endpoint en ese contexto").
+pub fn node_set_endpoints(
+    conn: &Connection,
+    id: &str,
+    endpoints: &HashMap<String, String>,
+) -> AppResult<()> {
+    conn.execute("DELETE FROM node_endpoints WHERE node_id = ?1", params![id])?;
+    for (context_id, address) in endpoints {
+        if address.trim().is_empty() {
+            continue;
+        }
+        conn.execute(
+            "INSERT INTO node_endpoints (node_id, context_id, address) VALUES (?1, ?2, ?3)",
+            params![id, context_id, address],
         )?;
     }
     Ok(())
@@ -463,6 +512,110 @@ pub fn credential_delete(conn: &Connection, id: &str) -> AppResult<()> {
     Ok(())
 }
 
+// --- Búsqueda global --------------------------------------------------------
+
+/// Decide si un nodo casa la consulta (case-insensitive, subcadena) y devuelve
+/// una descripción legible del **primer** campo que casa. Prioridad: etiqueta,
+/// hostname, dirección (endpoint), otras propiedades. Núcleo puro y testeable;
+/// la consulta se asume ya normalizada (minúsculas, sin espacios sobrantes).
+fn node_search_match(
+    query: &str,
+    label: &str,
+    props: &HashMap<String, String>,
+    endpoints: &HashMap<String, String>,
+) -> Option<String> {
+    if query.is_empty() {
+        return None;
+    }
+    let hit = |v: &str| v.to_lowercase().contains(query);
+
+    if hit(label) {
+        return Some("etiqueta".to_string());
+    }
+    if let Some(h) = props.get("hostname") {
+        if hit(h) {
+            return Some(format!("hostname · {h}"));
+        }
+    }
+    // Direcciones (una por contexto). Se ordenan para un resultado estable.
+    let mut addrs: Vec<&String> = endpoints.values().collect();
+    addrs.sort();
+    if let Some(a) = addrs.into_iter().find(|a| hit(a)) {
+        return Some(format!("IP · {a}"));
+    }
+    // Resto de propiedades (url_admin, notas…), en orden estable por clave.
+    let mut rest: Vec<(&String, &String)> =
+        props.iter().filter(|(k, _)| k.as_str() != "hostname").collect();
+    rest.sort_by(|a, b| a.0.cmp(b.0));
+    rest.into_iter()
+        .find(|(_, v)| hit(v))
+        .map(|(k, v)| format!("{k} · {v}"))
+}
+
+/// Busca nodos por etiqueta, hostname, dirección (endpoint) u otras propiedades
+/// **en todos los diagramas**. Devuelve los aciertos ordenados por diagrama y
+/// etiqueta. Consulta vacía ⇒ sin resultados.
+pub fn search_nodes(conn: &Connection, query: &str) -> AppResult<Vec<SearchHit>> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Propiedades y endpoints de todos los nodos, indexados por node_id.
+    let mut props: HashMap<String, HashMap<String, String>> = HashMap::new();
+    let mut prop_stmt = conn.prepare("SELECT node_id, key, value FROM node_properties")?;
+    let prop_rows = prop_stmt.query_map([], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+    })?;
+    for row in prop_rows {
+        let (node_id, key, value) = row?;
+        props.entry(node_id).or_default().insert(key, value);
+    }
+    let mut endpoints: HashMap<String, HashMap<String, String>> = HashMap::new();
+    let mut ep_stmt = conn.prepare("SELECT node_id, context_id, address FROM node_endpoints")?;
+    let ep_rows = ep_stmt.query_map([], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+    })?;
+    for row in ep_rows {
+        let (node_id, context_id, address) = row?;
+        endpoints.entry(node_id).or_default().insert(context_id, address);
+    }
+
+    let empty: HashMap<String, String> = HashMap::new();
+    let mut stmt = conn.prepare(
+        "SELECT n.id, n.map_id, m.name, n.kind, n.label FROM nodes n \
+         JOIN maps m ON m.id = n.map_id",
+    )?;
+    let mut hits: Vec<SearchHit> = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, String>(4)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .filter_map(|(node_id, map_id, map_name, kind, label)| {
+            let p = props.get(&node_id).unwrap_or(&empty);
+            let e = endpoints.get(&node_id).unwrap_or(&empty);
+            node_search_match(&q, &label, p, e).map(|matched| SearchHit {
+                node_id,
+                map_id,
+                map_name,
+                kind,
+                label,
+                matched,
+            })
+        })
+        .collect();
+
+    hits.sort_by(|a, b| a.map_name.cmp(&b.map_name).then(a.label.cmp(&b.label)));
+    Ok(hits)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -523,9 +676,16 @@ mod tests {
         let db_node = node_create(&conn, &map.id, "database", "DB", 200.0, 20.0).unwrap();
 
         let mut props = HashMap::new();
-        props.insert("ip".to_string(), "10.0.0.5".to_string());
         props.insert("hostname".to_string(), "web01".to_string());
         node_set_properties(&conn, &web.id, &props).unwrap();
+
+        // La dirección es contextual: distinta en oficina y por VPN.
+        let ctx_default = crate::usecases::contexts::context_create(&conn, "Oficina").unwrap();
+        let ctx_vpn = crate::usecases::contexts::context_create(&conn, "VPN").unwrap();
+        let mut endpoints = HashMap::new();
+        endpoints.insert(ctx_default.id.clone(), "10.0.0.5".to_string());
+        endpoints.insert(ctx_vpn.id.clone(), "172.16.0.5".to_string());
+        node_set_endpoints(&conn, &web.id, &endpoints).unwrap();
 
         edge_create(&conn, &map.id, &web.id, &db_node.id, Some("5432/tcp")).unwrap();
 
@@ -534,8 +694,33 @@ mod tests {
         assert_eq!(graph.edges.len(), 1);
         assert_eq!(graph.edges[0].label.as_deref(), Some("5432/tcp"));
         let loaded_web = graph.nodes.iter().find(|n| n.id == web.id).unwrap();
-        assert_eq!(loaded_web.properties.get("ip").map(String::as_str), Some("10.0.0.5"));
+        assert_eq!(loaded_web.properties.get("hostname").map(String::as_str), Some("web01"));
+        assert_eq!(loaded_web.endpoints.get(&ctx_default.id).map(String::as_str), Some("10.0.0.5"));
+        assert_eq!(loaded_web.endpoints.get(&ctx_vpn.id).map(String::as_str), Some("172.16.0.5"));
         assert_eq!(loaded_web.x, 10.0);
+    }
+
+    #[test]
+    fn node_endpoints_replace_and_skip_empty() {
+        let conn = db();
+        let map = map_create(&conn, "Red", None).unwrap();
+        let node = node_create(&conn, &map.id, "server", "A", 0.0, 0.0).unwrap();
+        let ctx = crate::usecases::contexts::context_create(&conn, "Oficina").unwrap();
+
+        let mut endpoints = HashMap::new();
+        endpoints.insert(ctx.id.clone(), "10.0.0.9".to_string());
+        endpoints.insert("otro".to_string(), "   ".to_string()); // vacío → se ignora
+        node_set_endpoints(&conn, &node.id, &endpoints).unwrap();
+
+        let loaded = graph_load(&conn, &map.id).unwrap();
+        let n = &loaded.nodes[0];
+        assert_eq!(n.endpoints.len(), 1);
+        assert_eq!(n.endpoints.get(&ctx.id).map(String::as_str), Some("10.0.0.9"));
+
+        // Reemplaza por conjunto vacío → borra todos.
+        node_set_endpoints(&conn, &node.id, &HashMap::new()).unwrap();
+        let loaded = graph_load(&conn, &map.id).unwrap();
+        assert!(loaded.nodes[0].endpoints.is_empty());
     }
 
     #[test]
@@ -612,6 +797,69 @@ mod tests {
         let listed = credential_list(&conn, &node.id).unwrap();
         let defaults = listed.iter().filter(|c| c.is_default).count();
         assert_eq!(defaults, 1, "solo una credencial por defecto por nodo");
+    }
+
+    #[test]
+    fn search_match_prioritizes_label_hostname_then_ip() {
+        let mut props = HashMap::new();
+        props.insert("hostname".to_string(), "web01".to_string());
+        props.insert("url_admin".to_string(), "https://panel.local".to_string());
+        let mut eps = HashMap::new();
+        eps.insert("ctx".to_string(), "10.0.0.5".to_string());
+
+        // Case-insensitive, subcadena; la etiqueta gana si también casa.
+        assert_eq!(
+            node_search_match("web", "Web server", &props, &eps).as_deref(),
+            Some("etiqueta")
+        );
+        assert_eq!(
+            node_search_match("web0", "Servidor", &props, &eps).as_deref(),
+            Some("hostname · web01")
+        );
+        assert_eq!(
+            node_search_match("10.0.0", "Servidor", &props, &eps).as_deref(),
+            Some("IP · 10.0.0.5")
+        );
+        assert_eq!(
+            node_search_match("panel", "Servidor", &props, &eps).as_deref(),
+            Some("url_admin · https://panel.local")
+        );
+        assert!(node_search_match("nada", "Servidor", &props, &eps).is_none());
+    }
+
+    #[test]
+    fn search_nodes_spans_all_maps_and_sorts() {
+        let conn = db();
+        let m1 = map_create(&conn, "Producción", None).unwrap();
+        let m2 = map_create(&conn, "Staging", None).unwrap();
+        let web = node_create(&conn, &m1.id, "server", "Web", 0.0, 0.0).unwrap();
+        let _db = node_create(&conn, &m2.id, "database", "Base de datos", 0.0, 0.0).unwrap();
+
+        let mut props = HashMap::new();
+        props.insert("hostname".to_string(), "web01.prod".to_string());
+        node_set_properties(&conn, &web.id, &props).unwrap();
+        let ctx = crate::usecases::contexts::context_create(&conn, "Oficina").unwrap();
+        let mut eps = HashMap::new();
+        eps.insert(ctx.id.clone(), "10.0.0.5".to_string());
+        node_set_endpoints(&conn, &web.id, &eps).unwrap();
+
+        // Consulta vacía ⇒ sin resultados.
+        assert!(search_nodes(&conn, "   ").unwrap().is_empty());
+
+        // Casa por hostname en un mapa concreto.
+        let by_host = search_nodes(&conn, "web01").unwrap();
+        assert_eq!(by_host.len(), 1);
+        assert_eq!(by_host[0].node_id, web.id);
+        assert_eq!(by_host[0].map_name, "Producción");
+        assert_eq!(by_host[0].matched, "hostname · web01.prod");
+
+        // Casa por IP.
+        assert_eq!(search_nodes(&conn, "10.0.0.5").unwrap().len(), 1);
+
+        // Casa por etiqueta en otro mapa.
+        let by_label = search_nodes(&conn, "base").unwrap();
+        assert_eq!(by_label.len(), 1);
+        assert_eq!(by_label[0].map_name, "Staging");
     }
 
     // Helper para clonar el input en tests (CredentialInput no es Clone por los &str).

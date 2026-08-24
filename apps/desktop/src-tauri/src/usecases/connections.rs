@@ -93,7 +93,7 @@ fn shell_quote(arg: &str) -> String {
 }
 
 /// Une un argv en una línea de shell segura (para pasarla a `bash -c`).
-fn to_shell_line(argv: &[String]) -> String {
+pub fn to_shell_line(argv: &[String]) -> String {
     argv.iter()
         .map(|a| shell_quote(a))
         .collect::<Vec<_>>()
@@ -106,7 +106,12 @@ fn to_shell_line(argv: &[String]) -> String {
 /// emuladores como konsole crasheen al no poder crear la sesión (error Qt de
 /// "null widget").
 pub fn hold_wrapper(inner: &[String]) -> Vec<String> {
-    let line = to_shell_line(inner);
+    hold_line(&to_shell_line(inner))
+}
+
+/// Igual que `hold_wrapper` pero sobre una línea de shell ya construida (permite
+/// encadenar comandos, p. ej. `ssh-copy-id … && ssh -i …`).
+pub fn hold_line(line: &str) -> Vec<String> {
     let script = format!(
         "{line}; status=$?; echo; \
          read -n1 -s -r -p \"Conexión finalizada (código $status). Pulsa una tecla para cerrar…\"; echo"
@@ -127,24 +132,75 @@ fn ssh_destination(req: &ConnectionRequest) -> String {
 /// Comando SSH interno (el que corre dentro de la terminal). Con llave usa `-i`;
 /// con contraseña, `ssh` la pide de forma interactiva en la terminal (el usuario
 /// la teclea). Karto no intermedia la contraseña al conectar.
-pub fn ssh_inner_command(req: &ConnectionRequest) -> Vec<String> {
-    let mut cmd = vec!["ssh".to_string()];
+/// Argumentos comunes de la credencial SSH (llave, puerto y opciones extra), sin
+/// el ejecutable `ssh` ni el destino. Se reutiliza tanto en la conexión normal
+/// como en el sondeo de datos del equipo.
+fn ssh_base_args(req: &ConnectionRequest) -> Vec<String> {
+    let mut args = Vec::new();
     if let Some(key) = &req.key_path {
-        cmd.push("-i".into());
-        cmd.push(key.clone());
+        args.push("-i".into());
+        args.push(key.clone());
     }
     if let Some(port) = req.port {
-        cmd.push("-p".into());
-        cmd.push(port.to_string());
+        args.push("-p".into());
+        args.push(port.to_string());
     }
     // Opciones extra del usuario: cada una entra como `-o <opción>` (un solo
     // argv por opción, así valores con espacios —p. ej. ProxyCommand— no rompen).
     for opt in &req.ssh_options {
-        cmd.push("-o".into());
-        cmd.push(opt.clone());
+        args.push("-o".into());
+        args.push(opt.clone());
     }
+    args
+}
+
+pub fn ssh_inner_command(req: &ConnectionRequest) -> Vec<String> {
+    let mut cmd = vec!["ssh".to_string()];
+    cmd.extend(ssh_base_args(req));
     cmd.push(ssh_destination(req));
     cmd
+}
+
+/// Línea de shell que **sondea el equipo y luego abre la sesión interactiva**,
+/// con una sola autenticación. Usa multiplexado SSH (`ControlMaster`): la primera
+/// conexión corre el script de facts y vuelca su salida a `facts_file` (local);
+/// la segunda, interactiva y **sin modificar**, reutiliza el socket sin volver a
+/// autenticar. Sirve igual con llave o con contraseña (el usuario la teclea una
+/// vez en la primera). Si el multiplexado no está disponible, la interactiva
+/// simplemente vuelve a pedir credenciales (degradado, no roto).
+pub fn ssh_facts_line(req: &ConnectionRequest, control_path: &str, facts_file: &str) -> String {
+    let base = ssh_base_args(req);
+    let dest = ssh_destination(req);
+
+    // 1) Conexión de sondeo: establece el maestro, corre el script, sale.
+    let mut probe = vec!["ssh".to_string()];
+    for o in [
+        "ControlMaster=auto",
+        &format!("ControlPath={control_path}"),
+        "ControlPersist=30",
+        "ConnectTimeout=8",
+        "BatchMode=no",
+    ] {
+        probe.push("-o".into());
+        probe.push(o.to_string());
+    }
+    probe.extend(base.clone());
+    probe.push(dest.clone());
+    probe.push(crate::usecases::facts::remote_script());
+
+    // 2) Conexión interactiva: reutiliza el maestro (sin re-autenticar).
+    let mut inter = vec!["ssh".to_string()];
+    inter.push("-o".into());
+    inter.push(format!("ControlPath={control_path}"));
+    inter.extend(base);
+    inter.push(dest);
+
+    format!(
+        "{} > {} 2>/dev/null; {}",
+        to_shell_line(&probe),
+        shell_quote(facts_file),
+        to_shell_line(&inter),
+    )
 }
 
 /// Normaliza el texto libre de opciones SSH: una opción por línea, recortando
@@ -165,13 +221,28 @@ pub fn parse_ssh_options(raw: Option<&str>) -> Vec<String> {
 /// terminal por defecto del sistema (Fase 3 posterior afinará mac/Windows).
 pub fn build_ssh(req: &ConnectionRequest, terminal: Option<&TerminalDef>) -> AppResult<LaunchSpec> {
     let held = hold_wrapper(&ssh_inner_command(req));
-    let term = terminal.ok_or_else(|| {
+    Ok(wrap_in_terminal(require_terminal(terminal)?, &held))
+}
+
+/// Como `build_ssh` pero sondea el equipo antes de la sesión interactiva
+/// (ver `ssh_facts_line`). `facts_file` recibe los datos para que Karto los lea.
+pub fn build_ssh_with_facts(
+    req: &ConnectionRequest,
+    terminal: Option<&TerminalDef>,
+    control_path: &str,
+    facts_file: &str,
+) -> AppResult<LaunchSpec> {
+    let held = hold_line(&ssh_facts_line(req, control_path, facts_file));
+    Ok(wrap_in_terminal(require_terminal(terminal)?, &held))
+}
+
+fn require_terminal(terminal: Option<&TerminalDef>) -> AppResult<&TerminalDef> {
+    terminal.ok_or_else(|| {
         AppError::Other(
             "no se encontró una terminal soportada (instala gnome-terminal, konsole, kitty…)"
                 .into(),
         )
-    })?;
-    Ok(wrap_in_terminal(term, &held))
+    })
 }
 
 /// Abre una URL en el navegador por defecto según el SO.
@@ -187,12 +258,19 @@ pub fn build_open_url(os: Os, url: &str) -> LaunchSpec {
     }
 }
 
-/// Comando de cliente VNC (Linux, `vncviewer`). La contraseña VNC automática
-/// requiere un archivo de formato propio del cliente y se abordará después;
-/// por ahora abre el visor apuntando a `host:puerto`.
-pub fn build_vnc(req: &ConnectionRequest) -> LaunchSpec {
+/// Abre el **cliente VNC por defecto del equipo** apuntando a `vnc://host:puerto`,
+/// delegando en el abridor del SO (`xdg-open`/`open`/`start`, igual que Web). Así
+/// no dependemos de un binario concreto ni de empaquetar uno: el sistema lanza el
+/// visor VNC registrado para el esquema `vnc://` y el usuario teclea la contraseña.
+/// La inyección automática de la contraseña (sidecar TigerVNC + `VNC_PASSWORD`)
+/// queda pendiente para una fase posterior.
+pub fn build_vnc(req: &ConnectionRequest, os: Os) -> LaunchSpec {
     let port = req.port.unwrap_or(5900);
-    LaunchSpec::plain("vncviewer", vec![format!("{}:{}", req.host, port)])
+    let authority = match &req.user {
+        Some(user) => format!("{user}@{}:{}", req.host, port),
+        None => format!("{}:{}", req.host, port),
+    };
+    build_open_url(os, &format!("vnc://{authority}"))
 }
 
 /// Arma el `LaunchSpec` completo para una petición, según su tipo y el SO.
@@ -213,7 +291,7 @@ pub fn plan(req: &ConnectionRequest, os: Os) -> AppResult<LaunchSpec> {
                 .ok_or_else(|| AppError::Other("el nodo no tiene URL de administración".into()))?;
             Ok(build_open_url(os, url))
         }
-        ConnectionKind::Vnc => Ok(build_vnc(req)),
+        ConnectionKind::Vnc => Ok(build_vnc(req, os)),
         ConnectionKind::Rdp => Err(AppError::Other(
             "las conexiones RDP aún no están soportadas".into(),
         )),
@@ -222,13 +300,32 @@ pub fn plan(req: &ConnectionRequest, os: Os) -> AppResult<LaunchSpec> {
 
 // --- Resolución desde el vault ----------------------------------------------
 
-/// Deriva el host de las propiedades del nodo: prioriza `ip`, luego `hostname`.
-fn node_host(conn: &Connection, node_id: &str) -> AppResult<Option<String>> {
+/// Deriva la dirección del nodo para el contexto activo: primero el endpoint del
+/// nodo en ese contexto (la IP/host con la que se alcanza *desde ahí*); si no hay
+/// (o no se pasó contexto), cae al `hostname` de las propiedades como respaldo
+/// estable. Así, al cambiar de contexto (sitio/VPN), la conexión usa la dirección
+/// correcta sin tocar nodo por nodo.
+pub(crate) fn node_host(
+    conn: &Connection,
+    node_id: &str,
+    context_id: Option<&str>,
+) -> AppResult<Option<String>> {
+    if let Some(ctx) = context_id {
+        let endpoint = conn
+            .query_row(
+                "SELECT address FROM node_endpoints WHERE node_id = ?1 AND context_id = ?2",
+                params![node_id, ctx],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()?;
+        if endpoint.is_some() {
+            return Ok(endpoint);
+        }
+    }
+    // Respaldo: hostname/FQDN (identidad estable, no depende del contexto).
     let host = conn
         .query_row(
-            "SELECT value FROM node_properties \
-             WHERE node_id = ?1 AND key IN ('ip', 'hostname') \
-             ORDER BY CASE key WHEN 'ip' THEN 0 ELSE 1 END LIMIT 1",
+            "SELECT value FROM node_properties WHERE node_id = ?1 AND key = 'hostname'",
             params![node_id],
             |r| r.get::<_, String>(0),
         )
@@ -237,7 +334,7 @@ fn node_host(conn: &Connection, node_id: &str) -> AppResult<Option<String>> {
 }
 
 /// URL de administración del nodo (`url_admin` o `url`).
-fn node_url(conn: &Connection, node_id: &str) -> AppResult<Option<String>> {
+pub(crate) fn node_url(conn: &Connection, node_id: &str) -> AppResult<Option<String>> {
     let url = conn
         .query_row(
             "SELECT value FROM node_properties \
@@ -256,6 +353,8 @@ struct CredRow {
     port: Option<u16>,
     key_path: Option<String>,
     options: Option<String>,
+    /// Material de la llave privada guardado en el vault (si el usuario lo eligió).
+    private_key: Option<String>,
 }
 
 /// Lee la credencial elegida (o la predeterminada del nodo si `credential_id` es
@@ -268,7 +367,7 @@ fn load_credential(
     let row = match credential_id {
         Some(id) => conn
             .query_row(
-                "SELECT kind, username, port, key_path, options FROM credentials \
+                "SELECT kind, username, port, key_path, options, private_key FROM credentials \
                  WHERE id = ?1 AND node_id = ?2",
                 params![id, node_id],
                 map_cred_row,
@@ -276,7 +375,7 @@ fn load_credential(
             .optional()?,
         None => conn
             .query_row(
-                "SELECT kind, username, port, key_path, options FROM credentials \
+                "SELECT kind, username, port, key_path, options, private_key FROM credentials \
                  WHERE node_id = ?1 ORDER BY is_default DESC, kind LIMIT 1",
                 params![node_id],
                 map_cred_row,
@@ -293,7 +392,28 @@ fn map_cred_row(r: &rusqlite::Row) -> rusqlite::Result<CredRow> {
         port: r.get::<_, Option<i64>>(2)?.map(|p| p as u16),
         key_path: r.get(3)?,
         options: r.get(4)?,
+        private_key: r.get(5)?,
     })
+}
+
+/// Escribe la llave privada a disco con permisos 0600 si el archivo aún no
+/// existe. Se usa para materializar una llave guardada en el vault al abrir el
+/// vault en otro equipo. Crea el directorio padre si hace falta.
+pub fn materialize_key(key_path: &str, private_key: &str) -> AppResult<()> {
+    let path = std::path::Path::new(key_path);
+    if path.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, private_key)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
 }
 
 /// Construye la petición de conexión leyendo el nodo y la credencial del vault.
@@ -301,6 +421,7 @@ pub fn resolve(
     conn: &Connection,
     node_id: &str,
     credential_id: Option<&str>,
+    context_id: Option<&str>,
 ) -> AppResult<ConnectionRequest> {
     let cred = load_credential(conn, node_id, credential_id)?;
     let kind = ConnectionKind::from_str(&cred.kind)
@@ -321,9 +442,17 @@ pub fn resolve(
             })
         }
         _ => {
-            let host = node_host(conn, node_id)?.ok_or_else(|| {
-                AppError::Other("el nodo no tiene IP ni hostname para conectar".into())
+            let host = node_host(conn, node_id, context_id)?.ok_or_else(|| {
+                AppError::Other(
+                    "el nodo no tiene dirección en el contexto activo ni hostname para conectar"
+                        .into(),
+                )
             })?;
+            // Si la credencial trae la llave guardada en el vault y su archivo no
+            // existe en disco (p. ej. vault movido a otro equipo), se materializa.
+            if let (Some(kp), Some(pk)) = (&cred.key_path, &cred.private_key) {
+                materialize_key(kp, pk)?;
+            }
             Ok(ConnectionRequest {
                 kind,
                 user: cred.username,
@@ -342,18 +471,200 @@ pub fn resolve(
 /// Resuelve la conexión y lanza el proceso correspondiente (terminal con `ssh`,
 /// navegador con la URL, o visor VNC). Con SSH por contraseña, `ssh` la pide de
 /// forma interactiva en la terminal; Karto no maneja el secreto al conectar.
-pub fn connect_node(
-    conn: &Connection,
-    node_id: &str,
-    credential_id: Option<&str>,
-) -> AppResult<()> {
-    let req = resolve(conn, node_id, credential_id)?;
-    let spec = plan(&req, Os::current())?;
+/// Abre el cliente interactivo de BD (psql/mysql/mongosh/redis-cli) en una
+/// terminal. El motor viene de la propiedad `gestor` del nodo; el secreto va por
+/// variable de entorno (o en la URI de mongo). Solo Linux por ahora (mac/Windows
+/// en Fase 7). Reutiliza el pipeline de resolución/armado de `usecases::scripts`.
+/// Lanza el proceso de una conexión ya armada, registrando un warning de
+/// diagnóstico si no arranca (binario ausente, permisos…). El error del SO no
+/// incluye host ni secreto, así que es seguro registrarlo.
+fn spawn_connection(spec: &LaunchSpec, node_id: &str, kind: &str) -> AppResult<()> {
     std::process::Command::new(&spec.program)
         .args(&spec.args)
         .spawn()
         .map(|_| ())
-        .map_err(|e| AppError::Other(format!("no se pudo lanzar la conexión: {e}")))
+        .map_err(|e| {
+            crate::usecases::diagnostics::warn(
+                "connection",
+                "launch_failed",
+                &[
+                    ("nodeId", node_id),
+                    ("kind", kind),
+                    ("program", &spec.program),
+                    ("error", &e.to_string()),
+                ],
+            );
+            AppError::Other(format!("no se pudo lanzar la conexión: {e}"))
+        })
+}
+
+fn connect_db(conn: &Connection, node_id: &str, context_id: Option<&str>) -> AppResult<()> {
+    use crate::usecases::scripts;
+    if Os::current() != Os::Linux {
+        return Err(AppError::Other(
+            "la conexión a BD solo está disponible en Linux por ahora".into(),
+        ));
+    }
+    let engine: String = conn
+        .query_row(
+            "SELECT value FROM node_properties WHERE node_id = ?1 AND key = 'gestor'",
+            params![node_id],
+            |r| r.get(0),
+        )
+        .optional()?
+        .ok_or_else(|| AppError::Other("el nodo de BD no tiene 'gestor' definido".into()))?;
+    if !scripts::is_db_engine(&engine) {
+        return Err(AppError::Other(format!(
+            "motor de BD no soportado para conectar: {engine}"
+        )));
+    }
+
+    let dbconn = scripts::resolve_db_target(conn, node_id, context_id, &engine)?;
+    let spec = scripts::build_db_command(&engine, &dbconn, true)?; // interactivo
+    if !program_in_path(&spec.program) {
+        crate::usecases::diagnostics::warn(
+            "connection",
+            "db_client_missing",
+            &[
+                ("nodeId", node_id),
+                ("engine", &engine),
+                ("program", &spec.program),
+            ],
+        );
+        return Err(AppError::Other(format!(
+            "no se encontró el cliente '{}' en el PATH; instálalo",
+            spec.program
+        )));
+    }
+
+    // Cliente (programa + args) envuelto para mantener la terminal abierta al salir.
+    let mut inner = Vec::with_capacity(spec.args.len() + 1);
+    inner.push(spec.program.clone());
+    inner.extend(spec.args.clone());
+    let terminal = require_terminal(detect_terminal(LINUX_TERMINALS, program_in_path))?;
+    let launch = wrap_in_terminal(terminal, &hold_wrapper(&inner));
+
+    let mut command = std::process::Command::new(&launch.program);
+    command.args(&launch.args);
+    // El secreto viaja por env (heredado por la terminal → cliente), no en argv.
+    if let Some((k, v)) = &spec.env {
+        command.env(k, v);
+    }
+    command
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| {
+            crate::usecases::diagnostics::warn(
+                "connection",
+                "db_launch_failed",
+                &[
+                    ("nodeId", node_id),
+                    ("engine", &engine),
+                    ("program", &spec.program),
+                    ("error", &e.to_string()),
+                ],
+            );
+            AppError::Other(format!("no se pudo lanzar la conexión: {e}"))
+        })
+}
+
+pub fn connect_node(
+    conn: &Connection,
+    node_id: &str,
+    credential_id: Option<&str>,
+    context_id: Option<&str>,
+) -> AppResult<()> {
+    // Credenciales de BD: abren el cliente interactivo (otra tubería, no SSH/URL).
+    if load_credential(conn, node_id, credential_id)?.kind == "db" {
+        return connect_db(conn, node_id, context_id);
+    }
+    let req = resolve(conn, node_id, credential_id, context_id)?;
+    let os = Os::current();
+
+    // Plantilla del vault (override del comando interno). Si existe para SSH en
+    // Linux, **gana** y se salta el sondeo de facts (una plantilla custom manda:
+    // podría reestructurar el comando de formas incompatibles con el multiplexado).
+    if req.kind == ConnectionKind::Ssh && os == Os::Linux {
+        if let Some(cmd) = crate::usecases::templates::vault_override(conn, "ssh", os.as_key())? {
+            let inner = crate::usecases::templates::render(&cmd, &req);
+            if inner.is_empty() {
+                return Err(AppError::Other(
+                    "la plantilla de conexión quedó vacía tras sustituir los datos".into(),
+                ));
+            }
+            let terminal = detect_terminal(LINUX_TERMINALS, program_in_path);
+            let spec = wrap_in_terminal(require_terminal(terminal)?, &hold_wrapper(&inner));
+            return spawn_connection(&spec, node_id, "ssh");
+        }
+    }
+
+    // SSH en Linux: además de abrir la terminal, sondea el equipo (hostname, SO,
+    // kernel…) y vuelca los datos a un archivo que el frontend lee luego.
+    let spec = if req.kind == ConnectionKind::Ssh && os == Os::Linux {
+        let facts_file = crate::usecases::facts::facts_file_path(node_id);
+        let control = crate::usecases::facts::control_path(node_id);
+        // Limpia un sondeo anterior para no leer datos rancios.
+        let _ = std::fs::remove_file(&facts_file);
+        let terminal = detect_terminal(LINUX_TERMINALS, program_in_path);
+        build_ssh_with_facts(
+            &req,
+            terminal,
+            &control.to_string_lossy(),
+            &facts_file.to_string_lossy(),
+        )?
+    } else {
+        plan(&req, os)?
+    };
+    spawn_connection(&spec, node_id, req.kind.as_str())
+}
+
+/// Abre la URL del nodo (`url_admin`/`url`) en el navegador del sistema, sin
+/// necesidad de credencial: abrir un enlace no requiere el secreto de acceso.
+pub fn open_node_url(conn: &Connection, node_id: &str) -> AppResult<()> {
+    let url = node_url(conn, node_id)?
+        .filter(|u| !u.trim().is_empty())
+        .ok_or_else(|| AppError::Other("el nodo no tiene URL configurada".into()))?;
+    let spec = build_open_url(Os::current(), url.trim());
+    std::process::Command::new(&spec.program)
+        .args(&spec.args)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| {
+            crate::usecases::diagnostics::warn(
+                "connection",
+                "url_open_failed",
+                &[
+                    ("nodeId", node_id),
+                    ("program", &spec.program),
+                    ("error", &e.to_string()),
+                ],
+            );
+            AppError::Other(format!("no se pudo abrir la URL: {e}"))
+        })
+}
+
+/// Abre una URL externa (http/https) en el navegador del sistema. A diferencia
+/// de `open_node_url`, no toca el vault: se usa para enlaces fijos de la app
+/// (p. ej. la sección "Acerca de"). Se rechaza cualquier esquema que no sea
+/// http/https para no delegar en el SO la apertura de esquemas arbitrarios.
+pub fn open_external_url(url: &str) -> AppResult<()> {
+    let url = url.trim();
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err(AppError::Other("solo se permiten enlaces http/https".into()));
+    }
+    let spec = build_open_url(Os::current(), url);
+    std::process::Command::new(&spec.program)
+        .args(&spec.args)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| {
+            crate::usecases::diagnostics::warn(
+                "connection",
+                "external_url_open_failed",
+                &[("program", &spec.program), ("error", &e.to_string())],
+            );
+            AppError::Other(format!("no se pudo abrir la URL: {e}"))
+        })
 }
 
 #[cfg(test)]
@@ -371,6 +682,24 @@ mod tests {
             url: None,
             ssh_options: Vec::new(),
         }
+    }
+
+    #[test]
+    fn facts_line_probes_then_reuses_master() {
+        let line = ssh_facts_line(&req_ssh_key(), "/tmp/cm.sock", "/tmp/facts.txt");
+        // Dos invocaciones de ssh separadas por `;`, la primera redirige al archivo.
+        let (probe, inter) = line.split_once("; ssh ").unwrap();
+        // Sondeo: establece el maestro, corre el script remoto y vuelca al archivo.
+        assert!(probe.contains("ControlMaster=auto"));
+        assert!(probe.contains("ControlPath=/tmp/cm.sock"));
+        assert!(probe.contains("-i /home/me/.ssh/id_ed25519") && probe.contains("-p 2222"));
+        assert!(probe.contains("root@10.0.0.5"));
+        assert!(probe.contains(crate::usecases::facts::BEGIN));
+        assert!(probe.trim_end().ends_with("> /tmp/facts.txt 2>/dev/null"));
+        // Interactiva: reutiliza el socket, sin ControlMaster/script.
+        assert!(inter.contains("ControlPath=/tmp/cm.sock"));
+        assert!(!inter.contains("ControlMaster"));
+        assert!(inter.trim_end().ends_with("root@10.0.0.5"));
     }
 
     #[test]
@@ -510,6 +839,39 @@ mod tests {
     }
 
     #[test]
+    fn external_url_rejects_non_http_schemes() {
+        assert!(open_external_url("file:///etc/passwd").is_err());
+        assert!(open_external_url("javascript:alert(1)").is_err());
+        assert!(open_external_url("evesan.rocks").is_err());
+    }
+
+    #[test]
+    fn vnc_opens_scheme_url_with_default_client_per_os() {
+        let req = ConnectionRequest {
+            kind: ConnectionKind::Vnc,
+            user: None,
+            host: "10.0.0.7".into(),
+            port: Some(5901),
+            key_path: None,
+            url: None,
+            ssh_options: Vec::new(),
+        };
+        // Linux delega en xdg-open con la URL vnc://host:puerto.
+        let linux = build_vnc(&req, Os::Linux);
+        assert_eq!(linux.program, "xdg-open");
+        assert_eq!(linux.args, vec!["vnc://10.0.0.7:5901"]);
+        // macOS usa `open` (lanza Screen Sharing).
+        assert_eq!(build_vnc(&req, Os::Macos).program, "open");
+        // Puerto por defecto 5900 y usuario incrustado en la autoridad si lo hay.
+        let with_user = ConnectionRequest {
+            user: Some("admin".into()),
+            port: None,
+            ..req
+        };
+        assert_eq!(build_vnc(&with_user, Os::Linux).args, vec!["vnc://admin@10.0.0.7:5900"]);
+    }
+
+    #[test]
     fn plan_web_uses_url() {
         let req = ConnectionRequest {
             kind: ConnectionKind::Web,
@@ -548,10 +910,16 @@ mod tests {
     }
 
     #[test]
-    fn resolve_ssh_uses_ip_and_default_credential() {
+    fn resolve_ssh_uses_context_endpoint_and_default_credential() {
         let conn = seed();
+        // Dirección por contexto: 'default' existe tras la migración.
         conn.execute(
-            "INSERT INTO node_properties (node_id, key, value) VALUES ('n1','ip','10.0.0.9'),('n1','hostname','web.local')",
+            "INSERT INTO node_endpoints (node_id, context_id, address) VALUES ('n1','default','10.0.0.9')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO node_properties (node_id, key, value) VALUES ('n1','hostname','web.local')",
             [],
         )
         .unwrap();
@@ -562,16 +930,39 @@ mod tests {
         )
         .unwrap();
 
-        let req = resolve(&conn, "n1", None).unwrap();
+        let req = resolve(&conn, "n1", None, Some("default")).unwrap();
         assert_eq!(req.kind, ConnectionKind::Ssh);
-        assert_eq!(req.host, "10.0.0.9"); // ip gana a hostname
+        assert_eq!(req.host, "10.0.0.9"); // endpoint del contexto gana a hostname
         assert_eq!(req.user.as_deref(), Some("root"));
         assert_eq!(req.port, Some(22));
         assert_eq!(req.ssh_options, vec!["ServerAliveInterval=60", "ProxyJump bastion"]);
     }
 
     #[test]
-    fn resolve_falls_back_to_hostname_when_no_ip() {
+    fn resolve_switches_address_per_context() {
+        let conn = seed();
+        conn.execute(
+            "INSERT INTO access_contexts (id, name, position) VALUES ('vpn','VPN',1)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO node_endpoints (node_id, context_id, address) \
+             VALUES ('n1','default','10.0.0.9'),('n1','vpn','172.16.0.9')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO credentials (id, node_id, kind, is_default) VALUES ('c1','n1','ssh',1)",
+            [],
+        )
+        .unwrap();
+        assert_eq!(resolve(&conn, "n1", None, Some("default")).unwrap().host, "10.0.0.9");
+        assert_eq!(resolve(&conn, "n1", None, Some("vpn")).unwrap().host, "172.16.0.9");
+    }
+
+    #[test]
+    fn resolve_falls_back_to_hostname_when_no_endpoint() {
         let conn = seed();
         conn.execute(
             "INSERT INTO node_properties (node_id, key, value) VALUES ('n1','hostname','web.local')",
@@ -583,7 +974,10 @@ mod tests {
             [],
         )
         .unwrap();
-        assert_eq!(resolve(&conn, "n1", None).unwrap().host, "web.local");
+        // Sin endpoint en el contexto activo → respaldo al hostname.
+        assert_eq!(resolve(&conn, "n1", None, Some("default")).unwrap().host, "web.local");
+        // Sin contexto → también respaldo al hostname.
+        assert_eq!(resolve(&conn, "n1", None, None).unwrap().host, "web.local");
     }
 
     #[test]
@@ -599,7 +993,7 @@ mod tests {
             [],
         )
         .unwrap();
-        let req = resolve(&conn, "n1", None).unwrap();
+        let req = resolve(&conn, "n1", None, None).unwrap();
         assert_eq!(req.kind, ConnectionKind::Web);
         assert_eq!(req.url.as_deref(), Some("https://p.local"));
         assert!(req.ssh_options.is_empty());
@@ -609,7 +1003,7 @@ mod tests {
     fn resolve_specific_credential_id() {
         let conn = seed();
         conn.execute(
-            "INSERT INTO node_properties (node_id, key, value) VALUES ('n1','ip','1.2.3.4')",
+            "INSERT INTO node_endpoints (node_id, context_id, address) VALUES ('n1','default','1.2.3.4')",
             [],
         )
         .unwrap();
@@ -619,13 +1013,16 @@ mod tests {
             [],
         )
         .unwrap();
-        assert_eq!(resolve(&conn, "n1", Some("c2")).unwrap().user.as_deref(), Some("deploy"));
+        assert_eq!(
+            resolve(&conn, "n1", Some("c2"), Some("default")).unwrap().user.as_deref(),
+            Some("deploy")
+        );
     }
 
     #[test]
     fn resolve_errors_without_credentials() {
         let conn = seed();
-        assert!(resolve(&conn, "n1", None).is_err());
+        assert!(resolve(&conn, "n1", None, Some("default")).is_err());
     }
 
     #[test]
@@ -636,6 +1033,6 @@ mod tests {
             [],
         )
         .unwrap();
-        assert!(resolve(&conn, "n1", None).is_err());
+        assert!(resolve(&conn, "n1", None, Some("default")).is_err());
     }
 }
