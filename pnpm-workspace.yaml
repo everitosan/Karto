@@ -1,10 +1,11 @@
 packages:
   - "apps/*"
   - "packages/*"
+# Dependencias autorizadas a ejecutar build/postinstall scripts.
+# En pnpm v11 la clave es `allowBuilds` (mapa); `onlyBuiltDependencies` (v10)
+# ya no se honra y provocaba ERR_PNPM_IGNORED_BUILDS en CI.
 allowBuilds:
+  esbuild: true
+  sharp: true
+  svelte-preprocess: true
   '@hugeicons/svelte': true
-onlyBuiltDependencies:
-  - esbuild
-  - sharp
-  - svelte-preprocess
-  - "@hugeicons/svelte"
