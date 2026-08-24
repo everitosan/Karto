@@ -530,6 +530,62 @@ pub fn resolve(
 
 // --- Lanzamiento (efecto) ---------------------------------------------------
 
+/// Cuando Karto corre empaquetado como **AppImage**, su `AppRun` inyecta rutas a
+/// las librerías del bundle (`LD_LIBRARY_PATH`, `GTK_PATH`, `GIO_MODULE_DIR`…).
+/// Cualquier proceso externo que lancemos (la terminal, `xdg-open`) las **hereda**
+/// e intenta cargar esas libs incompatibles con las del sistema → no arranca (la
+/// terminal "no abre"). Antes de spawnear devolvemos al hijo un entorno de sistema:
+/// de las variables tipo-lista quitamos solo las entradas bajo `$APPDIR` y
+/// eliminamos por completo las que apuntan a un fichero/dir del bundle. Fuera del
+/// AppImage (deb, binario suelto, dev) `APPDIR` no existe y no tocamos nada.
+fn strip_appimage_env(cmd: &mut std::process::Command) {
+    let Some(appdir) = std::env::var_os("APPDIR") else {
+        return;
+    };
+    let appdir = std::path::PathBuf::from(appdir);
+
+    // Variables tipo-PATH (rutas separadas por ':'): conservamos las del sistema.
+    for var in [
+        "LD_LIBRARY_PATH",
+        "XDG_DATA_DIRS",
+        "GTK_PATH",
+        "GST_PLUGIN_SYSTEM_PATH",
+        "GST_PLUGIN_SYSTEM_PATH_1_0",
+    ] {
+        let Some(val) = std::env::var_os(var) else { continue };
+        let kept: Vec<_> = std::env::split_paths(&val)
+            .filter(|p| !p.starts_with(&appdir))
+            .collect();
+        match std::env::join_paths(kept) {
+            Ok(joined) if !joined.is_empty() => {
+                cmd.env(var, joined);
+            }
+            _ => {
+                cmd.env_remove(var);
+            }
+        }
+    }
+
+    // Variables que apuntan a un único fichero/dir dentro del bundle: se quitan.
+    for var in [
+        "GDK_PIXBUF_MODULE_FILE",
+        "GDK_PIXBUF_MODULEDIR",
+        "GIO_MODULE_DIR",
+        "GSETTINGS_SCHEMA_DIR",
+        "GST_PLUGIN_SCANNER",
+    ] {
+        cmd.env_remove(var);
+    }
+}
+
+/// `Command` para un proceso **externo** (terminal, navegador, visor VNC) con el
+/// entorno del AppImage ya saneado (ver [`strip_appimage_env`]).
+fn external_command(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    strip_appimage_env(&mut cmd);
+    cmd
+}
+
 /// Resuelve la conexión y lanza el proceso correspondiente (terminal con `ssh`,
 /// navegador con la URL, o visor VNC). Con SSH por contraseña, `ssh` la pide de
 /// forma interactiva en la terminal; Karto no maneja el secreto al conectar.
@@ -541,7 +597,7 @@ pub fn resolve(
 /// diagnóstico si no arranca (binario ausente, permisos…). El error del SO no
 /// incluye host ni secreto, así que es seguro registrarlo.
 fn spawn_connection(spec: &LaunchSpec, node_id: &str, kind: &str) -> AppResult<()> {
-    std::process::Command::new(&spec.program)
+    external_command(&spec.program)
         .args(&spec.args)
         .spawn()
         .map(|_| ())
@@ -606,7 +662,7 @@ fn connect_db(conn: &Connection, node_id: &str, context_id: Option<&str>) -> App
     let terminal = require_terminal(detect_terminal(LINUX_TERMINALS, program_in_path))?;
     let launch = wrap_in_terminal(terminal, &hold_wrapper(&inner));
 
-    let mut command = std::process::Command::new(&launch.program);
+    let mut command = external_command(&launch.program);
     command.args(&launch.args);
     // El secreto viaja por env (heredado por la terminal → cliente), no en argv.
     if let Some((k, v)) = &spec.env {
@@ -694,7 +750,7 @@ pub fn open_node_url(conn: &Connection, node_id: &str) -> AppResult<()> {
         .filter(|u| !u.trim().is_empty())
         .ok_or_else(|| AppError::Other("el nodo no tiene URL configurada".into()))?;
     let spec = build_open_url(Os::current(), url.trim());
-    std::process::Command::new(&spec.program)
+    external_command(&spec.program)
         .args(&spec.args)
         .spawn()
         .map(|_| ())
@@ -722,7 +778,7 @@ pub fn open_external_url(url: &str) -> AppResult<()> {
         return Err(AppError::Other("solo se permiten enlaces http/https".into()));
     }
     let spec = build_open_url(Os::current(), url);
-    std::process::Command::new(&spec.program)
+    external_command(&spec.program)
         .args(&spec.args)
         .spawn()
         .map(|_| ())
