@@ -1,9 +1,12 @@
 ---
 import "@karto/ui/styles.css";
-import { Button, Logo, Icon } from "@karto/ui";
+import { Logo, Icon } from "@karto/ui";
 import Starfield from "../components/Starfield.astro";
 import Reticle from "../components/Reticle.astro";
 import Constellation from "../components/Constellation.astro";
+import DownloadButton from "../components/DownloadButton.svelte";
+import DownloadPanel from "../components/DownloadPanel.svelte";
+import { fetchReleaseModel } from "../lib/releases";
 import type { Content, Locale } from "../i18n";
 
 interface Props {
@@ -11,6 +14,29 @@ interface Props {
 }
 const { t } = Astro.props;
 const locale = t.lang as Locale;
+
+// Releases horneados en build: el HTML sale con los enlaces ya puestos (sin
+// spinner ni rate limits para el visitante). Si el build corre sin red, esto
+// es null y el panel se rellena en cliente (refresco híbrido). Incluye la rc.
+const release = await fetchReleaseModel();
+
+// Sub-conjunto de textos que consumen los islands de descarga.
+const heroDownloadLabels = {
+  download: t.download.heroDownload,
+  fallback: t.download.heroFallback,
+  osNames: t.download.osNames,
+};
+const panelLabels = {
+  versionLabel: t.download.versionLabel,
+  prerelease: t.download.prerelease,
+  yourSystem: t.download.yourSystem,
+  comingSoon: t.download.comingSoon,
+  viewAll: t.download.viewAll,
+  errorTitle: t.download.errorTitle,
+  errorCta: t.download.errorCta,
+  osNames: t.download.osNames,
+  formatHints: t.download.formatHints,
+};
 
 // Umami self-hosted. Se cargan por variable de entorno (prefijo PUBLIC_ para
 // que Astro las exponga al cliente). Si faltan, no se inyecta el script y todo
@@ -60,9 +86,7 @@ const faqKeys = ["password", "telemetry", "platforms", "license"];
           <strong>{t.hero.subStrong}</strong>
         </p>
         <div class="ctas">
-          <span class="track" data-track="download_hero">
-            <Button client:load variant="primary">{t.hero.ctaPrimary}</Button>
-          </span>
+          <DownloadButton client:load release={release} labels={heroDownloadLabels} />
           <a class="btn-ghost" href="#navegacion" data-track="demo_scroll">{t.hero.ctaGhost}</a>
         </div>
         <Constellation />
@@ -195,11 +219,7 @@ const faqKeys = ["password", "telemetry", "platforms", "license"];
           <p class="act-sub">
             {t.launch.subA} <code>.karto</code> {t.launch.subB}
           </p>
-          <div class="ctas">
-            <span class="track" data-track="download_final">
-              <Button client:load variant="primary">{t.launch.cta}</Button>
-            </span>
-          </div>
+          <DownloadPanel client:load initial={release} labels={panelLabels} />
           <p class="launch-note">{t.launch.note}</p>
         </div>
 
@@ -328,6 +348,10 @@ const faqKeys = ["password", "telemetry", "platforms", "license"];
     <style>
       html {
         background: var(--karto-bg-bottom);
+        /* Corta cualquier desbordamiento horizontal (p. ej. el Reticle a
+           140vmin) sin crear un contenedor de scroll; más fiable que el
+           overflow-x:hidden del body, que algunos motores no propagan. */
+        overflow-x: clip;
       }
       body {
         margin: 0;
@@ -359,11 +383,20 @@ const faqKeys = ["password", "telemetry", "platforms", "license"];
       .hero {
         min-height: 100vh;
         display: grid;
+        /* minmax(0, 1fr): el track sigue al contenedor y no crece hasta el
+           max-content de los hijos (p. ej. el SVG de la constelación, ~760px),
+           que en móvil desbordaba el viewport y corría el contenido. */
+        grid-template-columns: minmax(0, 1fr);
         place-items: center;
         padding: var(--karto-space-8) var(--karto-space-6);
+        /* El Reticle es absoluto y a 140vmin sobresale del hero; lo recortamos
+           aquí para que no ensanche la página en móvil. */
+        overflow: clip;
       }
       .hero-inner {
         position: relative;
+        width: 100%;
+        min-width: 0;
         max-width: 52rem;
         text-align: center;
         display: flex;
@@ -654,8 +687,6 @@ const faqKeys = ["password", "telemetry", "platforms", "license"];
       footer a:hover { border-color: var(--karto-color-accent); }
       footer nav { display: flex; gap: var(--karto-space-5); }
       .lang-switch { font-weight: 600; }
-      /* Envoltura solo-tracking: no debe alterar el layout del CTA. */
-      .track { display: contents; }
     </style>
   </body>
 </html>

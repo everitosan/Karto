@@ -145,6 +145,28 @@ export const content = {
       cta: "Descargar para Linux",
       note: "mac y Windows en órbita próxima · sin telemetría",
     },
+    download: {
+      // Textos del selector de descargas (build + refresco en cliente).
+      versionLabel: "Versión",
+      prerelease: "Release candidate",
+      yourSystem: "Tu sistema",
+      comingSoon: "Próximamente",
+      viewAll: "Ver todos los releases en GitHub",
+      errorTitle: "No pudimos cargar las descargas.",
+      errorCta: "Ábrelas en GitHub",
+      heroDownload: "Descargar para",
+      heroFallback: "Ver descargas",
+      osNames: { linux: "Linux", mac: "macOS", windows: "Windows" },
+      formatHints: {
+        AppImage: "Universal · sin instalar",
+        deb: "Debian · Ubuntu",
+        rpm: "Fedora · RHEL",
+        Flatpak: "Flatpak",
+        dmg: "macOS",
+        msi: "Instalador",
+        exe: "Instalador",
+      },
+    },
     faq: [
       {
         q: "¿Y si olvido la contraseña maestra?",
@@ -303,6 +325,27 @@ export const content = {
       subB: "file and draw your sky.",
       cta: "Download for Linux",
       note: "mac and Windows in near orbit · no telemetry",
+    },
+    download: {
+      versionLabel: "Version",
+      prerelease: "Release candidate",
+      yourSystem: "Your system",
+      comingSoon: "Coming soon",
+      viewAll: "See all releases on GitHub",
+      errorTitle: "We couldn't load the downloads.",
+      errorCta: "Open them on GitHub",
+      heroDownload: "Download for",
+      heroFallback: "See downloads",
+      osNames: { linux: "Linux", mac: "macOS", windows: "Windows" },
+      formatHints: {
+        AppImage: "Universal · no install",
+        deb: "Debian · Ubuntu",
+        rpm: "Fedora · RHEL",
+        Flatpak: "Flatpak",
+        dmg: "macOS",
+        msi: "Installer",
+        exe: "Installer",
+      },
     },
     faq: [
       {
