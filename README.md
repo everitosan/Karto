@@ -13,10 +13,8 @@
 
 ## Qué es
 
-Karto dibuja tu infraestructura en un lienzo: routers, servidores, bases de datos y
-sus relaciones, cada uno con su metadata (IPs, hostnames, puertos, apps) y sus
-credenciales. Todo vive cifrado en local tras una contraseña maestra, y desde el
-mismo diagrama te conectas al equipo o le ejecutas un script.
+Karto es una aplicación de escritorio que contiene el diagrama de tu infraestructura en un canvas: routers, servidores, bases de datos y
+sus relaciones, cada uno con su metadata (IPs, hostnames, puertos, apps) y sus credenciales. Todo se concentra en un archivo cifrado en local tras una contraseña maestra y desde el mismo diagrama tienes acceso a ejecuciones remotas o una conexión directa por ssh o vnc.
 
 ## Características
 
@@ -30,19 +28,33 @@ mismo diagrama te conectas al equipo o le ejecutas un script.
 
 ## Instalación
 
-> **Estado:** `0.1.0-rc.1`. CI publica binarios de **Linux**; en Windows y macOS se
-> compila desde fuente mientras se cierra la Fase 7 (ver [PLAN.md](docs/specs/PLAN.md)).
+Descarga la última versión desde **[Releases](https://github.com/everitosan/Karto/releases)**.
 
-**Linux** — descarga el `.deb` o el `.AppImage` de [Releases](https://github.com/everitosan/Karto/releases):
+### Linux
+
+Con el `.deb` (Debian, Ubuntu, Mint):
 
 ```bash
-sudo apt install ./Karto_*_amd64.deb        # Debian / Ubuntu
-# o, sin instalar:
-chmod +x Karto_*_amd64.AppImage && ./Karto_*_amd64.AppImage
+sudo apt install ./Karto_*_amd64.deb
 ```
 
-**Windows y macOS** — todavía sin binario publicado: se compila desde fuente, ver
-[Desarrollo](#desarrollo).
+O con el `.AppImage`, que corre en cualquier distro sin instalar nada:
+
+```bash
+chmod +x Karto_*_amd64.AppImage
+./Karto_*_amd64.AppImage
+```
+
+### Windows y macOS
+
+Todavía no hay instalador listo para descargar. Mientras tanto puedes compilarlo tú
+siguiendo los pasos de [Desarrollo](#desarrollo).
+
+### Dependencias
+
+Karto se apoya en las herramientas del sistema para conectarse (`ssh`, `psql`,
+`redis-cli`, un visor VNC…). Este repo contiene un [instalador de clientes](#clientes-externos)
+que puede ayudarte para tener todo listo para el funcionamiento completo de karto.
 
 ## Clientes externos
 
@@ -52,29 +64,34 @@ del último apartado.
 
 ### Instalación
 
-`utils/scripts/install_clients.*` revisa qué falta en el `PATH` y lo instala con el
-gestor nativo del SO. Es idempotente (lo que ya tengas no se toca), muestra el plan
-y pide confirmación antes de instalar nada.
+Un script revisa qué te falta y lo instala con el gestor de paquetes de tu sistema.
+No toca lo que ya tengas: te muestra qué va a hacer y pide confirmación antes.
 
-**Windows** — PowerShell **como administrador** (lo exige el cliente OpenSSH):
+**Windows** — abre PowerShell **como administrador** (lo exige el cliente de SSH):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\utils\scripts\install_clients.ps1
+irm https://raw.githubusercontent.com/everitosan/Karto/main/utils/scripts/install_clients.ps1 -OutFile install_clients.ps1
+powershell -ExecutionPolicy Bypass -File .\install_clients.ps1
 ```
 
 **Linux** — apt · dnf · pacman · zypper:
 
 ```bash
-bash utils/scripts/install_clients.sh
+curl -fsSLO https://raw.githubusercontent.com/everitosan/Karto/main/utils/scripts/install_clients.sh
+bash install_clients.sh
 ```
 
 **macOS** — requiere [Homebrew](https://brew.sh):
 
 ```bash
-bash utils/scripts/install_clients.sh
+curl -fsSLO https://raw.githubusercontent.com/everitosan/Karto/main/utils/scripts/install_clients.sh
+bash install_clients.sh
 ```
 
-Opciones (en Linux/macOS también `make check-clients` y `make install-clients`):
+Si ya tienes el repositorio clonado, el script está en `utils/scripts/` y en
+Linux/macOS hay atajos: `make check-clients` y `make install-clients`.
+
+Opciones:
 
 | Para | Linux / macOS | Windows |
 | --- | --- | --- |
@@ -83,7 +100,7 @@ Opciones (en Linux/macOS también `make check-clients` y `make install-clients`)
 | Instalar solo unos grupos | `--only pg,redis` | `-Only pg,redis` |
 | Desatendido, sin preguntar | `--yes` | `-Yes` |
 
-### Qué instala
+### ¿Qué se instala?
 
 | Grupo | Para qué | Linux (Debian/Ubuntu) | macOS (brew) | Windows |
 | --- | --- | --- | --- | --- |
@@ -91,17 +108,24 @@ Opciones (en Linux/macOS también `make check-clients` y `make install-clients`)
 | `web` | Abrir URLs de administración web | `xdg-utils` | ya viene | ya viene |
 | `terminal` | Terminal donde se abre la sesión SSH | `xterm` (o `gnome-terminal`, `konsole`, `kitty`, `alacritty`) | ya viene | Windows Terminal |
 | `vnc` | Visor registrado para `vnc://` | `remmina` + `remmina-plugin-vnc` | ya viene | RealVNC Viewer |
-| `pg` | Cliente `psql` | `postgresql-client` | `libpq` | PostgreSQL 17 |
-| `mysql` | Cliente `mysql` (MySQL y MariaDB) | `default-mysql-client` | `mysql-client` | MariaDB |
+| `pg` | Cliente `psql` | `postgresql-client` | `libpq` | `psql` (choco) o PostgreSQL (winget) |
+| `mysql` | Cliente `mysql` (MySQL y MariaDB) | `default-mysql-client` | `mysql-client` | `mysql-cli` (choco) o MariaDB (winget) |
 | `mongo` | Cliente `mongosh` | repo oficial de MongoDB | `mongosh` | zip oficial de MongoDB |
 | `redis` | Cliente `redis-cli` | `redis-tools` | `redis` | zip de [redis-windows](https://github.com/redis-windows/redis-windows) |
 
 Detalles de Windows que conviene saber:
 
-- `psql` y `mysql` llegan **con su servidor**: winget no tiene paquete cliente-solo.
-  El script añade su `bin` al `PATH` de usuario, que los instaladores no hacen.
-- `mongosh` y `redis-cli` no tienen paquete en winget: se bajan del zip oficial a
-  `%LOCALAPPDATA%\Karto\tools`.
+- Si tienes **[Chocolatey](https://chocolatey.org/install)**, `psql` y `mysql` salen
+  de sus paquetes cliente-solo (`psql` y `mysql-cli`): el binario y nada más. Es la
+  vía recomendada, y el script la prefiere sola si detecta `choco`.
+- Sin Chocolatey se cae a winget, que de esos dos **solo publica el instalador
+  completo** — instala el servidor además del cliente. En ese caso el script añade
+  su `bin` al `PATH` de usuario, cosa que esos instaladores no hacen.
+- `mongosh` y `redis-cli` no tienen paquete en winget. Chocolatey sí (`mongodb-shell`
+  y `redis`), pero el script baja el zip oficial a `%LOCALAPPDATA%\Karto\tools`: para
+  mongosh es exactamente el mismo archivo que empaqueta choco, y para redis-cli es
+  una versión bastante más nueva (8.x contra la 6.2 de choco). Así queda igual con
+  Chocolatey o sin él.
 - `ssh-copy-id` no existe en Windows; el aprovisionamiento de llaves usa otra ruta.
 - El runtime de Windows sigue en curso: ver [windows-adapt.md](docs/specs/windows-adapt.md).
 

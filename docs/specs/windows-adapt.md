@@ -101,6 +101,79 @@ verificarlo con la app GUI empaquetada (`tauri:dev`), no solo desde los tests.
       `_ =>`. Además `ssh-copy-id` **no viene** con el OpenSSH de Windows → usar
       `type key.pub | ssh host "cat >> ~/.ssh/authorized_keys"`.
 
+## Fase 3b — Llaves gestionadas por Karto (portabilidad del vault)
+
+Sale de una observación al revisar el export: `copy_subset` incluye `private_key`
+en el `INSERT`, así que **el material de la llave viaja dentro del `.karto`** si
+se marca "credenciales". Pero `private_key` sólo se puebla al aprovisionar con
+"guardar en el vault"; una credencial dada de alta a mano lleva sólo `key_path`,
+que en otra máquina no apunta a nada.
+
+La idea: que Karto **no se lleve nunca llaves que no creó**, y aun así garantice
+que el vault es portable. Una llave del usuario sirve de *arranque*, no de carga.
+
+- [ ] **Reformular el disparador**. Hoy `needsKeyOnboarding` pregunta "¿le falta
+      llave?" (`!cred.keyPath`). Debe preguntar **"¿puede el vault llevarse esta
+      credencial?"** (`!hasVaultKey`). Es una línea, pero elimina la categoría
+      "ya tiene llave, no molestes" y crea "tiene llave, pero es tuya y no viaja".
+      Requiere exponer un `hasVaultKey: boolean` en el DTO de credencial — un
+      booleano, nunca el material.
+- [ ] **Reconocer las llaves propias**. `provision()` ya genera con
+      `-C karto:<node_id>`, y ese comentario queda **embebido en la llave privada**:
+      se recupera con `ssh-keygen -y -f <llave>` (tercer campo). Funciona
+      retroactivamente sobre las llaves ya generadas, sin migración.
+
+      **Obligatorio pasar `-P ""`**: comprobado en Windows, sobre una llave con
+      passphrase `ssh-keygen -y` se queda esperando la passphrase y **cuelga la
+      app**. Con `-P ""` sale en el acto con código 255. De paso resuelve la
+      clasificación: las llaves de Karto se generan con `-N ""`, así que una llave
+      con passphrase no es nuestra por construcción.
+- [ ] **Árbol de decisión** al registrar una credencial con llave:
+
+      | Llave que aporta el usuario | Acción |
+      | --- | --- |
+      | Comentario `karto:*` | leer el material y registrarlo en el vault; **no se crea nada** |
+      | Con passphrase | no es de Karto → rama de generar |
+      | Cualquier otra | ofrecer generar una de Karto, usando la existente como *bootstrap* |
+
+- [ ] **Bootstrap por llave existente**: `ssh-copy-id -i <nueva.pub> -o
+      IdentityFile=<la del usuario> -o IdentitiesOnly=yes`, y el usuario no teclea
+      nada. `copy_id_inner_command` necesita un parámetro más.
+- [ ] **Marcador estable**. El comentario actual lleva `<node_id>`, que en otro
+      vault no significa nada. Si nos apoyamos en él, merece algo autodescriptivo,
+      aceptando el formato viejo para no perder las llaves ya generadas.
+
+Dos límites que conviene no perder de vista:
+
+- **Esto reubica la exposición, no la elimina.** La llave de Karto sigue viajando
+  en claro dentro del `.karto` cifrado. Lo que se gana es que lo que viaja sea de
+  ámbito Karto y revocable por su cuenta, mientras la identidad personal o
+  corporativa del usuario no sale de su máquina. Es radio de daño, no anulación.
+- **El comentario es una afirmación, no una prueba**: cualquiera puede ponerle
+  `-C karto:loquesea` a su llave, y el falso positivo hace justo lo que queremos
+  evitar. Por eso la detección debe **proponer un valor por defecto visible**, no
+  actuar en silencio. La alternativa infalsificable —guardar la huella al
+  generar— no cubre el caso interesante ("llave de Karto que *este* vault no
+  conoce": otro vault, un backup, la credencial recreada), así que en todo caso
+  sería un complemento: huella = certeza, comentario = probable.
+- [ ] **Aprovisionamiento en Windows** (heredado de la Fase 3): `ssh-copy-id` no
+      viene con el OpenSSH de Windows → `type <pub> | ssh <host> "cat >>
+      ~/.ssh/authorized_keys"`. Esta fase lo vuelve el camino principal para tener
+      un vault portable, así que sube de prioridad.
+
+### Fase 3b.0 — Atomicidad del aprovisionamiento (bloqueante, bug actual)
+
+- [ ] `provision()` lanza la terminal con `spawn()` —sin esperar— y **acto seguido
+      escribe en la BD** (`store_in_vault`, `set_default_key`), sin saber si
+      `ssh-copy-id` funcionó. Hoy eso deja la credencial apuntando a una llave que
+      el servidor no acepta. Con la Fase 3b pasa a ser **pérdida de acceso**: se
+      repunta `key_path` de la llave que funcionaba a una que no.
+
+      Se arregla con el patrón que ya existe en el repo para los facts: el script
+      de la terminal deja un **marcador** en disco entre la copia y la sesión
+      interactiva (`copy && touch <marca> && ssh`), y la BD sólo se toca cuando
+      Karto lo ve. Frontend: mismo bucle de sondeo que `collectFacts`.
+
 ## Fase 4 — Sondeo de facts
 
 - [ ] **El multiplexado SSH no existe en Windows.** `ssh_facts_line`
@@ -149,7 +222,8 @@ verificarlo con la app GUI empaquetada (`tauri:dev`), no solo desde los tests.
 
 ## Orden de ejecución
 
-Fase 0 → Fase 1 → Fase 2 → Fase 3 → Fase 5 (BD) → Fase 7 (CI) → Fase 6 (decisión
-`%APPDATA%`) → Fase 4 → Fase 5 (RDP/VNC).
+Fase 0 ✅ → Fase 1 ✅ → Fase 2 ✅ → Fase 3 (ACLs) ✅ → **Fase 3b.0 (atomicidad)** →
+Fase 3b → Fase 5 (BD) → Fase 7 (CI) → Fase 6 (decisión `%APPDATA%`) → Fase 4 →
+Fase 5 (RDP/VNC).
 
 Las tres primeras desbloquean SSH; el resto se puede repartir sin bloquear a nadie.

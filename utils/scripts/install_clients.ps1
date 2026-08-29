@@ -2,8 +2,14 @@
 #
 # Equivalente para Windows de install_clients.sh. Karto no empaqueta clientes:
 # lanza las herramientas del sistema. Este script detecta cuáles faltan en el
-# PATH y las instala con winget o, cuando no hay paquete decente, con el zip
-# oficial del proveedor en %LOCALAPPDATA%\Karto\tools (y ajusta el PATH de usuario).
+# PATH y las instala con, por orden de preferencia:
+#   1. Chocolatey, si está presente: es el único que publica paquetes cliente-solo
+#      de psql y mysql (winget únicamente ofrece el instalador con servidor).
+#   2. winget, que viene de fábrica en Windows 10/11.
+#   3. El zip oficial del proveedor en %LOCALAPPDATA%\Karto\tools (mongosh y
+#      redis-cli). Choco los tiene, pero su mongodb-shell empaqueta ese mismo zip y
+#      su redis va varias versiones atrás, así que el zip sirve igual y además
+#      funciona sin Chocolatey.
 #
 # La lista refleja lo que el backend busca de verdad:
 #   - detect_tools()   (usecases/diagnostics.rs)
@@ -62,6 +68,17 @@ function Add-ToUserPath {
     Write-Info "PATH de usuario += $Dir"
   }
   if (($env:Path -split ';') -notcontains $Dir) { $env:Path = "$env:Path;$Dir" }
+}
+
+function Install-Choco {
+  param([string]$Id)
+  Write-Info "choco install $Id"
+  & choco install $Id -y --no-progress | Out-Host
+  if ($LASTEXITCODE -ne 0) { throw "choco devolvió $LASTEXITCODE al instalar $Id" }
+  # Chocolatey deja un shim en C:\ProgramData\chocolatey\bin, que ya está en el
+  # PATH de máquina; solo hay que refrescarlo en esta sesión.
+  $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+  if ($machine) { $env:Path = "$machine;$env:Path" }
 }
 
 function Install-Winget {
@@ -135,19 +152,25 @@ function Install-Ssh {
 }
 
 function Install-Psql {
+  # Chocolatey tiene paquete cliente-solo (`psql`: recorta el zip oficial de EDB a
+  # psql.exe + libpq, sin servidor). winget solo publica el instalador completo,
+  # así que es el respaldo cuando no hay choco.
+  if (Test-Bin 'choco') { Install-Choco 'psql'; return }
   Install-Winget 'PostgreSQL.PostgreSQL.17'
   if (-not (Add-ProductBinToPath 'PostgreSQL' '*' 'psql.exe')) {
     Write-Warn "psql se instaló pero no encontré su carpeta bin; añádela al PATH a mano."
   }
-  Write-Warn "El paquete de PostgreSQL incluye el servidor; Karto solo usa psql."
+  Write-Warn "winget solo trae PostgreSQL completo (incluye el servidor); con Chocolatey se instalaría solo el cliente."
 }
 
 function Install-Mysql {
+  # Igual que psql: `mysql-cli` de Chocolatey empaqueta mysql.exe de Oracle suelto.
+  if (Test-Bin 'choco') { Install-Choco 'mysql-cli'; return }
   Install-Winget 'MariaDB.Server'
   if (-not (Add-ProductBinToPath '' 'MariaDB*' 'mysql.exe')) {
     Write-Warn "mysql se instaló pero no encontré su carpeta bin; añádela al PATH a mano."
   }
-  Write-Warn "MariaDB incluye el servidor; Karto solo usa el cliente mysql (compatible con MySQL)."
+  Write-Warn "winget solo trae MariaDB completa (incluye el servidor); con Chocolatey se instalaría solo el cliente."
 }
 
 function Install-Mongosh {
@@ -229,7 +252,8 @@ foreach ($n in $selected) {
   if (-not (Get-Group $n)) { Write-Die "Grupo desconocido: $n (usa -List)" }
 }
 
-Write-Info "Windows $([Environment]::OSVersion.Version) - admin: $(Test-Admin)"
+if (Test-Bin 'choco') { $backend = 'Chocolatey + winget' } else { $backend = 'winget' }
+Write-Info "Windows $([Environment]::OSVersion.Version) - admin: $(Test-Admin) - gestor: $backend"
 Write-Host ""
 
 # `web` lo cubre el propio SO: build_open_url usa `cmd /C start`, siempre presente.
