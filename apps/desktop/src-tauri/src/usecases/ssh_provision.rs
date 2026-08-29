@@ -83,11 +83,29 @@ fn key_path_for(credential_id: &str) -> AppResult<PathBuf> {
     Ok(dir.join(format!("{credential_id}_ed25519")))
 }
 
-/// Script de shell que **encadena** `ssh-copy-id` y la conexión por llave: copia
-/// la pública (el usuario teclea la contraseña) y, si tiene éxito, abre la sesión
-/// ya con la llave (`copy && ssh -i …`). Función pura y testeable.
-pub fn onboarding_script(copy_id: &[String], ssh_key: &[String]) -> String {
-    format!("{} && {}", to_shell_line(copy_id), to_shell_line(ssh_key))
+/// Marcador que la terminal deja en disco cuando `ssh-copy-id` **sí** funcionó.
+///
+/// Karto lanza la terminal con `spawn` y no puede esperarla (la sesión queda
+/// abierta e interactiva), así que sin esta señal no hay forma de saber si la
+/// llave llegó al servidor. Mismo patrón que el sondeo de facts.
+pub fn marker_path(credential_id: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("karto-provision-{credential_id}.ok"))
+}
+
+/// Script de shell que **encadena** `ssh-copy-id`, el marcador de éxito y la
+/// conexión por llave: copia la pública (el usuario teclea la contraseña) y, si
+/// tiene éxito, deja la marca y abre la sesión ya con la llave.
+///
+/// El `touch` va **entre** la copia y la sesión interactiva a propósito: así la
+/// marca aparece en cuanto la copia termina, sin esperar a que el usuario cierre
+/// la terminal. Función pura y testeable.
+pub fn onboarding_script(copy_id: &[String], ssh_key: &[String], marker: &str) -> String {
+    format!(
+        "{} && touch {} && {}",
+        to_shell_line(copy_id),
+        to_shell_line(&[marker.to_string()]),
+        to_shell_line(ssh_key)
+    )
 }
 
 /// Envuelve un script en la terminal del SO (con `bash -c "…; read"`).
@@ -114,16 +132,19 @@ fn launch_in_terminal(script: &str) -> AppResult<LaunchSpec> {
     }
 }
 
-/// Orquesta el aprovisionamiento completo (efectos: genera llave, lanza en una
-/// terminal `ssh-copy-id && ssh -i llave` —el usuario teclea la contraseña una
-/// vez y queda conectado por llave— y persiste según las opciones). Devuelve la
-/// ruta de la llave privada.
+/// Orquesta el aprovisionamiento (efectos: genera la llave y lanza en una
+/// terminal `ssh-copy-id && touch <marca> && ssh -i llave`; el usuario teclea la
+/// contraseña una vez y queda conectado por llave). Devuelve la ruta de la llave
+/// privada generada.
+///
+/// **No persiste nada en la credencial**: eso lo hace `commit_if_provisioned`
+/// cuando aparece el marcador. La terminal es interactiva y se lanza con `spawn`,
+/// así que aquí todavía no se sabe si el servidor aceptó la llave.
 pub fn provision(
     conn: &Connection,
     node_id: &str,
     credential_id: &str,
     context_id: Option<&str>,
-    opts: ProvisionOptions,
 ) -> AppResult<String> {
     // El host al que copiar la llave depende del contexto activo (misma
     // resolución que al conectar): en oficina o por VPN la dirección difiere.
@@ -176,13 +197,43 @@ pub fn provision(
         ..req.clone()
     };
     let ssh_key = ssh_inner_command(&key_req);
-    let spec = launch_in_terminal(&onboarding_script(&copy_id, &ssh_key))?;
+    // Marca de una tanda anterior: se limpia para no dar por buena una copia vieja.
+    let marker = marker_path(credential_id);
+    let _ = std::fs::remove_file(&marker);
+    let spec = launch_in_terminal(&onboarding_script(
+        &copy_id,
+        &ssh_key,
+        &marker.to_string_lossy(),
+    ))?;
     std::process::Command::new(&spec.program)
         .args(&spec.args)
         .spawn()
         .map_err(|e| AppError::Other(format!("no se pudo lanzar el aprovisionamiento: {e}")))?;
 
-    // 3) Guardar la privada en el vault (portable) si se pidió.
+    // 3) La credencial **no** se toca todavía: hasta que no exista el marcador no
+    //    sabemos si el servidor aceptó la llave, y repuntar `key_path` a una llave
+    //    que no está en `authorized_keys` deja al usuario sin acceso. Lo hace
+    //    `commit_if_provisioned`, que el frontend sondea igual que los facts.
+    Ok(key_path_str)
+}
+
+/// Si la terminal dejó el marcador de éxito, aplica los cambios pedidos sobre la
+/// credencial y lo consume. Devuelve `true` si se aplicaron, `false` si la copia
+/// aún no ha terminado (o falló y el usuario cerró la terminal).
+///
+/// Es idempotente: consumido el marcador, las llamadas siguientes dan `false`.
+pub fn commit_if_provisioned(
+    conn: &Connection,
+    credential_id: &str,
+    opts: ProvisionOptions,
+) -> AppResult<bool> {
+    let marker = marker_path(credential_id);
+    if !marker.exists() {
+        return Ok(false);
+    }
+    let key_path = key_path_for(credential_id)?;
+    let key_path_str = key_path.to_string_lossy().to_string();
+
     if opts.store_in_vault {
         let private_key = std::fs::read_to_string(&key_path)
             .map_err(|e| AppError::Other(format!("no se pudo leer la llave generada: {e}")))?;
@@ -191,21 +242,20 @@ pub fn provision(
             params![private_key, credential_id],
         )?;
     }
-
-    // 4) Fijar la llave como método por defecto de la credencial si se pidió.
     if opts.set_default_key {
         conn.execute(
             "UPDATE credentials SET key_path = ?1 WHERE id = ?2",
             params![key_path_str, credential_id],
         )?;
     }
-
-    Ok(key_path_str)
+    let _ = std::fs::remove_file(&marker);
+    Ok(true)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infra::migrations;
 
     #[test]
     fn keygen_command_is_noninteractive_ed25519() {
@@ -264,9 +314,83 @@ mod tests {
             "/k".into(),
             "root@h".into(),
         ];
+        // El marcador va ENTRE la copia y la sesión interactiva: así aparece en
+        // cuanto la copia termina, sin esperar a que se cierre la terminal.
         assert_eq!(
-            onboarding_script(&copy, &ssh),
-            "ssh-copy-id -i /k.pub -p 22 root@h && ssh -i /k root@h"
+            onboarding_script(&copy, &ssh, "/tmp/karto-provision-c1.ok"),
+            "ssh-copy-id -i /k.pub -p 22 root@h && touch /tmp/karto-provision-c1.ok && ssh -i /k root@h"
         );
+    }
+
+    // --- Atomicidad (Fase 3b.0) ---
+
+    fn seed_cred() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        migrations::run(&conn).unwrap();
+        conn.execute("INSERT INTO maps (id, name) VALUES ('m1','M')", []).unwrap();
+        conn.execute(
+            "INSERT INTO nodes (id, map_id, kind, label, x, y) VALUES ('n1','m1','server','N',0,0)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO credentials (id, node_id, kind, username, key_path, is_default)              VALUES ('c1','n1','ssh','root','/ruta/previa',1)",
+            [],
+        )
+        .unwrap();
+        conn
+    }
+
+    fn key_path_of(cred: &str) -> std::path::PathBuf {
+        key_path_for(cred).unwrap()
+    }
+
+    /// Sin marcador la credencial no se toca: es el caso de `ssh-copy-id` que
+    /// falla y el usuario cierra la terminal. Antes se repuntaba `key_path` a una
+    /// llave que el servidor nunca aceptó, dejando al usuario sin acceso.
+    #[test]
+    fn commit_does_nothing_without_the_success_marker() {
+        let conn = seed_cred();
+        let _ = std::fs::remove_file(marker_path("c1"));
+        let opts = ProvisionOptions { set_default_key: true, store_in_vault: true };
+
+        assert!(!commit_if_provisioned(&conn, "c1", opts).unwrap());
+
+        let (kp, pk): (String, Option<String>) = conn
+            .query_row(
+                "SELECT key_path, private_key FROM credentials WHERE id = 'c1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(kp, "/ruta/previa", "no debe repuntar la llave");
+        assert!(pk.is_none(), "no debe guardar material");
+    }
+
+    /// Con marcador sí aplica, y consume la marca: una segunda pasada da false
+    /// (idempotente, el sondeo del frontend puede llamarlo varias veces).
+    #[test]
+    fn commit_applies_options_once_when_the_marker_is_present() {
+        let conn = seed_cred();
+        let key = key_path_of("c1");
+        std::fs::create_dir_all(key.parent().unwrap()).unwrap();
+        std::fs::write(&key, "MATERIAL-DE-LLAVE").unwrap();
+        std::fs::write(marker_path("c1"), "").unwrap();
+        let opts = ProvisionOptions { set_default_key: true, store_in_vault: true };
+
+        assert!(commit_if_provisioned(&conn, "c1", opts).unwrap());
+
+        let (kp, pk): (String, Option<String>) = conn
+            .query_row(
+                "SELECT key_path, private_key FROM credentials WHERE id = 'c1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(kp, key.to_string_lossy());
+        assert_eq!(pk.as_deref(), Some("MATERIAL-DE-LLAVE"));
+
+        assert!(!commit_if_provisioned(&conn, "c1", opts).unwrap(), "marcador consumido");
+        let _ = std::fs::remove_file(&key);
     }
 }

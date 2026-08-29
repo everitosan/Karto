@@ -521,18 +521,30 @@ fn ssh_provision_key(
     set_default_key: bool,
     store_in_vault: bool,
 ) -> AppResult<String> {
+    // Las opciones no se aplican aquí: viajan de vuelta en `ssh_provision_poll`,
+    // que es quien toca la credencial una vez confirmada la copia.
+    let _ = (set_default_key, store_in_vault);
+    vault.with_conn(|c| {
+        usecases::ssh_provision::provision(c, &node_id, &credential_id, context_id.as_deref())
+    })
+}
+
+/// Comprueba si el aprovisionamiento lanzado antes ya terminó bien y, en ese
+/// caso, aplica los cambios pedidos sobre la credencial. Devuelve `true` cuando
+/// los aplica. El frontend lo sondea igual que hace con los facts.
+#[tauri::command]
+fn ssh_provision_poll(
+    vault: tauri::State<Vault>,
+    credential_id: String,
+    set_default_key: bool,
+    store_in_vault: bool,
+) -> AppResult<bool> {
     let opts = usecases::ssh_provision::ProvisionOptions {
         set_default_key,
         store_in_vault,
     };
     vault.with_conn(|c| {
-        usecases::ssh_provision::provision(
-            c,
-            &node_id,
-            &credential_id,
-            context_id.as_deref(),
-            opts,
-        )
+        usecases::ssh_provision::commit_if_provisioned(c, &credential_id, opts)
     })
 }
 
@@ -948,7 +960,8 @@ pub fn run() {
             vault_trust_templates,
             open_node_url,
             open_external_url,
-            ssh_provision_key
+            ssh_provision_key,
+            ssh_provision_poll
         ])
         .run(tauri::generate_context!())
         .expect("error al arrancar la aplicación Karto");

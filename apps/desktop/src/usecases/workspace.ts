@@ -166,6 +166,21 @@ export function makeWorkspaceUseCases(io: Bridge = bridge) {
         storeInVault,
       }),
 
+    // ¿Terminó bien el aprovisionamiento lanzado antes? La terminal es
+    // interactiva y se lanza sin esperarla, así que el backend sólo toca la
+    // credencial cuando ve el marcador de éxito que deja `ssh-copy-id`. Devuelve
+    // `true` la única vez que aplica los cambios.
+    pollProvision: (
+      credentialId: string,
+      setDefaultKey: boolean,
+      storeInVault: boolean,
+    ) =>
+      io.invoke<boolean>("ssh_provision_poll", {
+        credentialId,
+        setDefaultKey,
+        storeInVault,
+      }),
+
     // --- Importación SSH ---
     // Candidatos a importar hallados bajo `~/.ssh` (config y config.d/**).
     sshImportCandidates: () =>

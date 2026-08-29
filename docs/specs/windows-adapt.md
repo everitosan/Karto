@@ -161,18 +161,25 @@ Dos límites que conviene no perder de vista:
       ~/.ssh/authorized_keys"`. Esta fase lo vuelve el camino principal para tener
       un vault portable, así que sube de prioridad.
 
-### Fase 3b.0 — Atomicidad del aprovisionamiento (bloqueante, bug actual)
+### Fase 3b.0 — Atomicidad del aprovisionamiento ✅
 
-- [ ] `provision()` lanza la terminal con `spawn()` —sin esperar— y **acto seguido
+- [x] `provision()` lanzaba la terminal con `spawn()` —sin esperar— y **acto seguido
       escribe en la BD** (`store_in_vault`, `set_default_key`), sin saber si
       `ssh-copy-id` funcionó. Hoy eso deja la credencial apuntando a una llave que
       el servidor no acepta. Con la Fase 3b pasa a ser **pérdida de acceso**: se
       repunta `key_path` de la llave que funcionaba a una que no.
 
-      Se arregla con el patrón que ya existe en el repo para los facts: el script
-      de la terminal deja un **marcador** en disco entre la copia y la sesión
-      interactiva (`copy && touch <marca> && ssh`), y la BD sólo se toca cuando
-      Karto lo ve. Frontend: mismo bucle de sondeo que `collectFacts`.
+      Resuelto con el patrón que ya existía para los facts: el script de la
+      terminal deja un **marcador** en disco entre la copia y la sesión
+      interactiva (`copy && touch <marca> && ssh`) —ahí a propósito, para que
+      aparezca en cuanto la copia acaba y no al cerrar la terminal—, `provision()`
+      ya no escribe en la BD, y lo hace `commit_if_provisioned` (idempotente:
+      consume la marca) vía el comando `ssh_provision_poll`. El frontend lo sondea
+      con el mismo bucle que `collectFacts`, con margen amplio porque entre medias
+      el usuario teclea su contraseña.
+
+      Si la confirmación no llega, no se hace nada: la credencial se queda como
+      estaba, que es justo lo correcto cuando `ssh-copy-id` falló.
 
 ## Fase 4 — Sondeo de facts
 

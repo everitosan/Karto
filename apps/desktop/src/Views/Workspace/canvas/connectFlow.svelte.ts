@@ -125,6 +125,38 @@ export function cancelTemplateTrust(): void {
   templateConfirm.pending = null;
 }
 
+/**
+ * Espera a que el backend confirme el aprovisionamiento y avisa al panel para que
+ * refresque la credencial. Da margen amplio (~3 min): entre medias el usuario
+ * teclea su contraseña en la terminal, y a veces la del servidor tarda.
+ *
+ * Si nunca llega la confirmación no se hace nada: la credencial se queda como
+ * estaba, que es exactamente lo correcto cuando `ssh-copy-id` falló.
+ */
+async function awaitProvision(
+  credentialId: string,
+  choice: KeyOnboardingChoice,
+  onProvisioned?: () => void,
+): Promise<void> {
+  for (let i = 0; i < 90; i++) {
+    await sleep(2000);
+    try {
+      const applied = await workspaceUseCases.pollProvision(
+        credentialId,
+        choice.setDefaultKey,
+        choice.storeInVault,
+      );
+      if (applied) {
+        onProvisioned?.();
+        return;
+      }
+    } catch {
+      // Vault bloqueado o error transitorio: dejamos de sondear.
+      return;
+    }
+  }
+}
+
 /** Aplica la elección del modal: aprovisiona la llave o conecta con contraseña. */
 export async function confirmOnboarding(choice: KeyOnboardingChoice): Promise<void> {
   const pending = onboarding.pending;
@@ -139,7 +171,9 @@ export async function confirmOnboarding(choice: KeyOnboardingChoice): Promise<vo
         choice.storeInVault,
         networkContext.activeId,
       );
-      pending.onProvisioned?.();
+      // La credencial no se ha tocado aún: el backend espera a ver que la copia
+      // funcionó. Sondeamos hasta que lo confirme (o el usuario se rinda).
+      void awaitProvision(pending.credential.id, choice, pending.onProvisioned);
     } else {
       const connected = await connectOrConfirm(pending.nodeId, pending.credential.id);
       if (connected) void collectFacts(pending.nodeId);
