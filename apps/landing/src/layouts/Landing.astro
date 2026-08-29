@@ -360,7 +360,10 @@ const faqKeys = ["password", "telemetry", "platforms", "license"];
         background: var(--karto-bg);
         background-attachment: fixed;
         color: var(--karto-color-text);
-        overflow-x: hidden;
+        /* Sin overflow-x aquí: 'hidden' obliga a overflow-y:auto (spec CSS) y
+           convierte el body en un contenedor de scroll propio, rompiendo el
+           scroll nativo del documento. El recorte horizontal ya lo hace el
+           html con overflow-x:clip, que no crea contenedor de scroll. */
       }
       main, .hero, footer { position: relative; z-index: 1; }
       main { max-width: 64rem; margin: 0 auto; padding: 0 1.5rem 4rem; }
