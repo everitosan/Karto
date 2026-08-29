@@ -12,6 +12,7 @@
 use crate::domain::{ConnectionKind, ConnectionRequest, Os};
 use crate::error::{AppError, AppResult};
 use rusqlite::{params, Connection, OptionalExtension};
+use std::path::{Path, PathBuf};
 
 /// Comando listo para lanzar: programa + argumentos.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,14 +58,51 @@ pub fn detect_terminal(
     terminals.iter().find(|t| exists(t.program))
 }
 
+/// Extensiones con las que probar un nombre de ejecutable. En Unix el nombre va
+/// tal cual; en Windows el binario lleva sufijo (`ssh` → `ssh.exe`), así que se
+/// prueban además las de `PATHEXT`. La cadena vacía va **siempre primero**: cubre
+/// el nombre que ya trae extensión (`wt.exe`) y mantiene Unix sin cambios.
+///
+/// Sin esto, en Windows `dir.join("ssh")` no existe nunca y la detección de
+/// binarios devuelve `false` para todo: clientes de BD, terminales y el
+/// encabezado de diagnóstico se quedan en blanco sin explicación.
+pub fn executable_exts() -> Vec<String> {
+    let mut exts = vec![String::new()];
+    if cfg!(windows) {
+        // Valor por defecto de Windows cuando `PATHEXT` no está definida.
+        let raw = std::env::var_os("PATHEXT").unwrap_or_else(|| ".COM;.EXE;.BAT;.CMD".into());
+        exts.extend(
+            raw.to_string_lossy()
+                .split(';')
+                .map(str::trim)
+                .filter(|e| !e.is_empty())
+                .map(|e| e.to_ascii_lowercase()),
+        );
+    }
+    exts
+}
+
+/// Núcleo puro de la búsqueda: ¿hay un archivo `name` + alguna de `exts` en
+/// alguno de `dirs`? `is_file` se inyecta para probarlo sin tocar disco y para
+/// poder verificar el comportamiento de Windows compilando en Linux.
+pub fn find_program(
+    name: &str,
+    dirs: &[PathBuf],
+    exts: &[String],
+    is_file: impl Fn(&Path) -> bool,
+) -> bool {
+    dirs.iter()
+        .any(|dir| exts.iter().any(|ext| is_file(&dir.join(format!("{name}{ext}")))))
+}
+
 /// ¿Hay un ejecutable con ese nombre en el `PATH`? (sin dependencias externas).
 pub fn program_in_path(name: &str) -> bool {
     let Some(path) = std::env::var_os("PATH") else {
         return false;
     };
-    std::env::split_paths(&path).any(|dir| {
-        let candidate = dir.join(name);
-        std::fs::metadata(&candidate).map(|m| m.is_file()).unwrap_or(false)
+    let dirs: Vec<PathBuf> = std::env::split_paths(&path).collect();
+    find_program(name, &dirs, &executable_exts(), |p| {
+        std::fs::metadata(p).map(|m| m.is_file()).unwrap_or(false)
     })
 }
 
@@ -1208,5 +1246,80 @@ mod tests {
         )
         .unwrap();
         assert!(resolve(&conn, "n1", None, Some("default")).is_err());
+    }
+
+    // --- Detección de ejecutables en el PATH (Fase 1 Windows) ---
+
+    /// Predicado de "archivo existente" sobre una lista fija de rutas, para
+    /// probar la búsqueda sin tocar disco ni depender del SO anfitrión.
+    fn fake_fs<'a>(present: &'a [&'a str]) -> impl Fn(&Path) -> bool + 'a {
+        move |p: &Path| present.iter().any(|f| Path::new(f) == p)
+    }
+
+    fn dirs(list: &[&str]) -> Vec<PathBuf> {
+        list.iter().map(PathBuf::from).collect()
+    }
+
+    #[test]
+    fn find_program_matches_bare_name_on_unix_exts() {
+        let exts = vec![String::new()];
+        assert!(find_program(
+            "ssh",
+            &dirs(&["/usr/bin"]),
+            &exts,
+            fake_fs(&["/usr/bin/ssh"])
+        ));
+    }
+
+    // El caso que rompía Windows: el binario es `ssh.exe`, no `ssh`.
+    #[test]
+    fn find_program_appends_windows_extensions() {
+        let bare = vec![String::new()];
+        let windows = vec![String::new(), ".exe".into(), ".cmd".into()];
+        let present = ["C:/Windows/System32/OpenSSH/ssh.exe"];
+        let path = dirs(&["C:/Windows/System32/OpenSSH"]);
+
+        assert!(!find_program("ssh", &path, &bare, fake_fs(&present)));
+        assert!(find_program("ssh", &path, &windows, fake_fs(&present)));
+    }
+
+    // Un nombre que ya trae extensión se encuentra con la extensión vacía.
+    #[test]
+    fn find_program_accepts_name_with_extension() {
+        let exts = vec![String::new(), ".exe".into()];
+        assert!(find_program(
+            "wt.exe",
+            &dirs(&["C:/apps"]),
+            &exts,
+            fake_fs(&["C:/apps/wt.exe"])
+        ));
+    }
+
+    #[test]
+    fn find_program_scans_every_dir_and_reports_absence() {
+        let exts = vec![String::new(), ".exe".into()];
+        let path = dirs(&["/opt/bin", "/usr/bin"]);
+        assert!(find_program("psql", &path, &exts, fake_fs(&["/usr/bin/psql"])));
+        assert!(!find_program("mongosh", &path, &exts, fake_fs(&["/usr/bin/psql"])));
+    }
+
+    // Prueba de integración contra el PATH real: el intérprete de comandos del
+    // SO siempre está. En Windows es `cmd.exe`, así que este test falla si se
+    // vuelve a perder el manejo de `PATHEXT` (era el bug original).
+    #[test]
+    fn program_in_path_finds_the_system_shell() {
+        let shell = if cfg!(windows) { "cmd" } else { "sh" };
+        assert!(program_in_path(shell), "no se encontró '{shell}' en el PATH");
+    }
+
+    #[test]
+    fn executable_exts_always_tries_the_bare_name_first() {
+        let exts = executable_exts();
+        assert_eq!(exts.first().map(String::as_str), Some(""));
+        if cfg!(windows) {
+            assert!(exts.iter().any(|e| e == ".exe"), "faltan las de PATHEXT: {exts:?}");
+        } else {
+            assert_eq!(exts.len(), 1, "en Unix no se añaden extensiones: {exts:?}");
+        }
     }
 }
