@@ -60,16 +60,34 @@ en la Fase 7 (ver [PLAN.md](PLAN.md)).
 | Conectar por SSH y ejecutar scripts bash/python | cliente SSH + una terminal | `openssh-client` + una de: `gnome-terminal` · `konsole` · `kitty` · `alacritty` · `xterm` |
 | Aprovisionar llave SSH (generar + copiar) | `ssh-keygen`, `ssh-copy-id` | `openssh-client` |
 | Abrir URL de administración web y VNC | `xdg-open` | `xdg-utils` |
+| Visor VNC registrado para `vnc://` | `remmina` (u otro visor) | `remmina` + `remmina-plugin-vnc` |
 | PostgreSQL (script/conexión) | `psql` | `postgresql-client` |
 | MySQL / MariaDB (script/conexión) | `mysql` | `default-mysql-client` (o `mariadb-client`) |
 | MongoDB (script/conexión) | `mongosh` | `mongodb-mongosh` (repo oficial de MongoDB) |
 | Redis (script/conexión) | `redis-cli` | `redis-tools` |
 
+No hace falta instalarlos a mano: `utils/scripts/install_clients.sh` detecta lo que
+falta en el `PATH` y lo instala con el gestor nativo (apt · dnf · pacman · zypper ·
+brew). Es idempotente y no toca lo que ya esté.
+
 ```bash
-# Debian/Ubuntu — todo lo local de una vez (elige tu terminal preferida)
-sudo apt install openssh-client xdg-utils gnome-terminal \
-  postgresql-client default-mysql-client redis-tools
-# mongosh se instala desde el repo de MongoDB (paquete mongodb-mongosh)
+make check-clients     # solo reporta qué falta
+make install-clients   # instala lo que falte (pregunta antes)
+
+# Directo, con más control:
+./utils/scripts/install_clients.sh --list          # grupos disponibles
+./utils/scripts/install_clients.sh --only pg,redis # solo esos
+./utils/scripts/install_clients.sh --yes           # desatendido
+```
+
+En Windows el equivalente es `utils/scripts/install_clients.ps1` (winget, más los
+zips oficiales de `mongosh` y `redis-cli`, que no tienen paquete decente). El grupo
+`ssh` necesita PowerShell como administrador. Recuerda que el runtime de Windows
+sigue en curso: ver [windows-adapt.md](docs/specs/windows-adapt.md).
+
+```powershell
+.\utils\scripts\install_clients.ps1 -Check
+.\utils\scripts\install_clients.ps1
 ```
 
 **Remoto — el equipo destino**

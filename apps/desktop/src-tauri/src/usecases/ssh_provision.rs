@@ -92,7 +92,10 @@ pub fn onboarding_script(copy_id: &[String], ssh_key: &[String]) -> String {
 
 /// Envuelve un script en la terminal del SO (con `bash -c "…; read"`).
 fn launch_in_terminal(script: &str) -> AppResult<LaunchSpec> {
-    let held = hold_line(script);
+    // El script viene de `onboarding_script`, en sintaxis POSIX y con
+    // `ssh-copy-id`, que no existe en el OpenSSH de Windows: por eso el hold se
+    // pide para Linux y el resto de SO sigue rechazado (ver Fase 3 del plan).
+    let held = hold_line(script, Os::Linux);
     match Os::current() {
         Os::Linux => {
             let term = detect_terminal(LINUX_TERMINALS, program_in_path).ok_or_else(|| {
@@ -103,7 +106,8 @@ fn launch_in_terminal(script: &str) -> AppResult<LaunchSpec> {
             })?;
             Ok(wrap_in_terminal(term, &held))
         }
-        // mac/Windows: se aborda en la Fase 7 (terminal propia por SO).
+        // mac/Windows: Fase 3 de docs/specs/windows-adapt.md (Windows necesita
+        // además sustituir `ssh-copy-id`, que no viene con su OpenSSH).
         _ => Err(AppError::Other(
             "el aprovisionamiento de llave aún no está soportado en este sistema operativo".into(),
         )),

@@ -1,4 +1,4 @@
-.PHONY: help deploy-rc-app deploy-app deploy-landing version
+.PHONY: help deploy-rc-app deploy-app deploy-landing version install-clients check-clients
 
 SCRIPTS := utils/scripts
 
@@ -12,6 +12,12 @@ help: ## Muestra esta ayuda
 
 version: ## Imprime la versión actual (Cargo.toml)
 	@grep -m1 -E '^version = ' apps/desktop/src-tauri/Cargo.toml | sed -E 's/^version = "(.*)"/\1/'
+
+install-clients: ## Instala los clientes externos que Karto invoca en runtime
+	@bash $(SCRIPTS)/install_clients.sh
+
+check-clients: ## Reporta qué clientes externos faltan (no instala nada)
+	@bash $(SCRIPTS)/install_clients.sh --check
 
 deploy-rc-app: ## Publica un Release Candidate (bump + -rc.N, tag y push)
 	@bash $(SCRIPTS)/deploy_rc.sh

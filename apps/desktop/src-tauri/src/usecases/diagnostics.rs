@@ -170,7 +170,8 @@ pub fn record_startup() {
 /// Clientes de conexión y terminales soportadas presentes en el PATH. Saber cuáles
 /// faltan explica de un vistazo muchos fallos de "no se pudo lanzar/conectar".
 fn detect_tools() -> Vec<String> {
-    use crate::usecases::connections::{program_in_path, LINUX_TERMINALS};
+    use crate::domain::Os;
+    use crate::usecases::connections::{program_in_path, terminals_for};
     const CLIENTS: &[&str] = &[
         "ssh",
         "ssh-copy-id",
@@ -185,7 +186,9 @@ fn detect_tools() -> Vec<String> {
         .filter(|t| program_in_path(t))
         .map(|t| t.to_string())
         .collect();
-    for term in LINUX_TERMINALS {
+    // Terminales del SO en el que corre: en Windows listar las de Linux no
+    // decía nada (y con el bug de PATHEXT ni siquiera se detectaban).
+    for term in terminals_for(Os::current()) {
         if program_in_path(term.program) {
             found.push(term.program.to_string());
         }

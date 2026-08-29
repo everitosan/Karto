@@ -50,6 +50,29 @@ pub const LINUX_TERMINALS: &[TerminalDef] = &[
     TerminalDef { program: "xterm", exec: &["-e"] },
 ];
 
+/// Terminales de Windows en orden de preferencia. **Solo PowerShell**, y es una
+/// decisión deliberada: se lanza con `CREATE_NEW_CONSOLE` (ver `terminal_command`)
+/// y, si el usuario tiene Windows Terminal como terminal predeterminada del
+/// sistema, Windows enruta esa consola nueva a `wt` por su cuenta. Así se obtiene
+/// la UX de `wt` **sin** pasar el comando por su parser, que trocea la línea en
+/// cada `;` (comprobado: un script con `;` sin escapar no llega a ejecutarse).
+/// Apilar el escapado de `wt` sobre el de PowerShell sería una segunda capa de
+/// quoting sobre datos del vault: más superficie de inyección a cambio de nada.
+pub const WINDOWS_TERMINALS: &[TerminalDef] = &[TerminalDef {
+    program: "powershell.exe",
+    exec: &["-NoProfile", "-Command"],
+}];
+
+/// Terminales candidatas para un SO. macOS sigue sin soporte (su Fase 7 propia):
+/// la lista vacía hace que `require_terminal` dé el error explicativo.
+pub fn terminals_for(os: Os) -> &'static [TerminalDef] {
+    match os {
+        Os::Linux => LINUX_TERMINALS,
+        Os::Windows => WINDOWS_TERMINALS,
+        Os::Macos => &[],
+    }
+}
+
 /// Primera terminal disponible según el predicado `exists` (inyectable en test).
 pub fn detect_terminal(
     terminals: &[TerminalDef],
@@ -143,18 +166,54 @@ pub fn to_shell_line(argv: &[String]) -> String {
 /// no depender de que el ejecutable exista: `bash` siempre está, lo que evita que
 /// emuladores como konsole crasheen al no poder crear la sesión (error Qt de
 /// "null widget").
-pub fn hold_wrapper(inner: &[String]) -> Vec<String> {
-    hold_line(&to_shell_line(inner))
+pub fn hold_wrapper(inner: &[String], os: Os) -> Vec<String> {
+    match os {
+        Os::Windows => hold_line(&to_pwsh_line(inner), os),
+        _ => hold_line(&to_shell_line(inner), os),
+    }
 }
 
 /// Igual que `hold_wrapper` pero sobre una línea de shell ya construida (permite
 /// encadenar comandos, p. ej. `ssh-copy-id … && ssh -i …`).
-pub fn hold_line(line: &str) -> Vec<String> {
-    let script = format!(
-        "{line}; status=$?; echo; \
-         read -n1 -s -r -p \"Conexión finalizada (código $status). Pulsa una tecla para cerrar…\"; echo"
-    );
-    vec!["bash".to_string(), "-c".to_string(), script]
+pub fn hold_line(line: &str, os: Os) -> Vec<String> {
+    match os {
+        // PowerShell: `$LASTEXITCODE` trae el código del binario nativo. Devuelve
+        // **un solo elemento** porque la terminal ya aporta `-NoProfile -Command`
+        // (ver `WINDOWS_TERMINALS`), igual que en Linux `bash -c` aporta los suyos.
+        // `Read-Host` exige Enter: PowerShell no tiene equivalente de `read -n1`.
+        Os::Windows => vec![format!(
+            "{line}; $code = $LASTEXITCODE; Write-Host ''; \
+             Read-Host \"Conexión finalizada (código $code). Pulsa Enter para cerrar\""
+        )],
+        _ => {
+            let script = format!(
+                "{line}; status=$?; echo; \
+                 read -n1 -s -r -p \"Conexión finalizada (código $status). Pulsa una tecla para cerrar…\"; echo"
+            );
+            vec!["bash".to_string(), "-c".to_string(), script]
+        }
+    }
+}
+
+/// Escapa un argumento como **literal de PowerShell**: comillas simples, con la
+/// comilla interna duplicada. Dentro de comillas simples PowerShell no expande
+/// nada (`$`, backtick, `;`, `|`), así que un valor traído del vault —host,
+/// usuario, ruta de llave, opción SSH— no puede convertirse en código.
+fn pwsh_quote(arg: &str) -> String {
+    format!("'{}'", arg.replace('\'', "''"))
+}
+
+/// Une un argv en una línea de PowerShell. Antepone el operador de llamada `&`
+/// porque un programa entrecomillado se interpretaría como una **cadena** (se
+/// imprimiría) en vez de ejecutarse.
+pub fn to_pwsh_line(argv: &[String]) -> String {
+    if argv.is_empty() {
+        return String::new();
+    }
+    let mut parts = Vec::with_capacity(argv.len() + 1);
+    parts.push("&".to_string());
+    parts.extend(argv.iter().map(|a| pwsh_quote(a)));
+    parts.join(" ")
 }
 
 // --- Armado de comandos (puro) ----------------------------------------------
@@ -296,8 +355,12 @@ pub fn parse_ssh_options(raw: Option<&str>) -> Vec<String> {
 /// Comando final de SSH: envuelve el comando interno en la terminal del SO.
 /// En Linux requiere una terminal detectada; en mac/Windows se delega en la
 /// terminal por defecto del sistema (Fase 3 posterior afinará mac/Windows).
-pub fn build_ssh(req: &ConnectionRequest, terminal: Option<&TerminalDef>) -> AppResult<LaunchSpec> {
-    let held = hold_wrapper(&ssh_inner_command(req));
+pub fn build_ssh(
+    req: &ConnectionRequest,
+    terminal: Option<&TerminalDef>,
+    os: Os,
+) -> AppResult<LaunchSpec> {
+    let held = hold_wrapper(&ssh_inner_command(req), os);
     Ok(wrap_in_terminal(require_terminal(terminal)?, &held))
 }
 
@@ -309,16 +372,17 @@ pub fn build_ssh_with_facts(
     control_path: &str,
     facts_file: &str,
 ) -> AppResult<LaunchSpec> {
-    let held = hold_line(&ssh_facts_line(req, control_path, facts_file));
+    let held = hold_line(&ssh_facts_line(req, control_path, facts_file), Os::Linux);
     Ok(wrap_in_terminal(require_terminal(terminal)?, &held))
 }
 
 fn require_terminal(terminal: Option<&TerminalDef>) -> AppResult<&TerminalDef> {
     terminal.ok_or_else(|| {
-        AppError::Other(
-            "no se encontró una terminal soportada (instala gnome-terminal, konsole, kitty…)"
-                .into(),
-        )
+        AppError::Other(match Os::current() {
+            Os::Linux => "no se encontró una terminal soportada (instala gnome-terminal, konsole, kitty…)".into(),
+            Os::Windows => "no se encontró PowerShell en el PATH".to_string(),
+            Os::Macos => "las conexiones en terminal aún no están soportadas en macOS".to_string(),
+        })
     })
 }
 
@@ -354,12 +418,8 @@ pub fn build_vnc(req: &ConnectionRequest, os: Os) -> LaunchSpec {
 pub fn plan(req: &ConnectionRequest, os: Os) -> AppResult<LaunchSpec> {
     match req.kind {
         ConnectionKind::Ssh => {
-            let terminal = match os {
-                Os::Linux => detect_terminal(LINUX_TERMINALS, program_in_path),
-                // En mac/Windows aún no envolvemos en terminal explícita.
-                _ => None,
-            };
-            build_ssh(req, terminal)
+            let terminal = detect_terminal(terminals_for(os), program_in_path);
+            build_ssh(req, terminal, os)
         }
         ConnectionKind::Web => {
             let url = req
@@ -621,6 +681,34 @@ fn strip_appimage_env(cmd: &mut std::process::Command) {
 fn external_command(program: &str) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
     strip_appimage_env(&mut cmd);
+    // Windows: el abridor de URL/VNC pasa por `cmd /C start`, que sin esto
+    // parpadea una consola negra un instante antes de ceder al navegador.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
+/// `Command` para un proceso que **debe verse en una consola**: la terminal con
+/// `ssh` o el cliente de BD.
+///
+/// En Windows es imprescindible `CREATE_NEW_CONSOLE`: Karto es una app GUI y no
+/// tiene consola propia, así que sin la bandera el proceso no tendría dónde
+/// dibujarse. Con ella Windows crea una consola nueva — y si el usuario tiene
+/// Windows Terminal como predeterminada del sistema, la enruta ahí sola. En
+/// Linux/macOS el emulador de terminal ya abre su propia ventana.
+fn terminal_command(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    strip_appimage_env(&mut cmd);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
+        cmd.creation_flags(CREATE_NEW_CONSOLE);
+    }
     cmd
 }
 
@@ -635,7 +723,13 @@ fn external_command(program: &str) -> std::process::Command {
 /// diagnóstico si no arranca (binario ausente, permisos…). El error del SO no
 /// incluye host ni secreto, así que es seguro registrarlo.
 fn spawn_connection(spec: &LaunchSpec, node_id: &str, kind: &str) -> AppResult<()> {
-    external_command(&spec.program)
+    // SSH abre una terminal interactiva; web/VNC delegan en el abridor del SO.
+    let mut command = if kind == ConnectionKind::Ssh.as_str() {
+        terminal_command(&spec.program)
+    } else {
+        external_command(&spec.program)
+    };
+    command
         .args(&spec.args)
         .spawn()
         .map(|_| ())
@@ -697,10 +791,11 @@ fn connect_db(conn: &Connection, node_id: &str, context_id: Option<&str>) -> App
     let mut inner = Vec::with_capacity(spec.args.len() + 1);
     inner.push(spec.program.clone());
     inner.extend(spec.args.clone());
-    let terminal = require_terminal(detect_terminal(LINUX_TERMINALS, program_in_path))?;
-    let launch = wrap_in_terminal(terminal, &hold_wrapper(&inner));
+    let os = Os::current();
+    let terminal = require_terminal(detect_terminal(terminals_for(os), program_in_path))?;
+    let launch = wrap_in_terminal(terminal, &hold_wrapper(&inner, os));
 
-    let mut command = external_command(&launch.program);
+    let mut command = terminal_command(&launch.program);
     command.args(&launch.args);
     // El secreto viaja por env (heredado por la terminal → cliente), no en argv.
     if let Some((k, v)) = &spec.env {
@@ -755,8 +850,8 @@ pub fn connect_node(
                     "la plantilla de conexión quedó vacía tras sustituir los datos".into(),
                 ));
             }
-            let terminal = detect_terminal(LINUX_TERMINALS, program_in_path);
-            let spec = wrap_in_terminal(require_terminal(terminal)?, &hold_wrapper(&inner));
+            let terminal = detect_terminal(terminals_for(os), program_in_path);
+            let spec = wrap_in_terminal(require_terminal(terminal)?, &hold_wrapper(&inner, os));
             return spawn_connection(&spec, node_id, "ssh");
         }
     }
@@ -768,7 +863,7 @@ pub fn connect_node(
         let control = crate::usecases::facts::control_path(node_id);
         // Limpia un sondeo anterior para no leer datos rancios.
         let _ = std::fs::remove_file(&facts_file);
-        let terminal = detect_terminal(LINUX_TERMINALS, program_in_path);
+        let terminal = detect_terminal(terminals_for(os), program_in_path);
         build_ssh_with_facts(
             &req,
             terminal,
@@ -1000,13 +1095,13 @@ mod tests {
 
     #[test]
     fn build_ssh_requires_terminal_on_linux() {
-        assert!(build_ssh(&req_ssh_key(), None).is_err());
+        assert!(build_ssh(&req_ssh_key(), None, Os::Linux).is_err());
     }
 
     #[test]
     fn build_ssh_wraps_in_bash_hold() {
         let term = TerminalDef { program: "kitty", exec: &[] };
-        let spec = build_ssh(&req_ssh_key(), Some(&term)).unwrap();
+        let spec = build_ssh(&req_ssh_key(), Some(&term), Os::Linux).unwrap();
         // kitty no lleva flag de exec: argv = ["bash", "-c", "<script>"].
         assert_eq!(spec.args[0], "bash");
         assert_eq!(spec.args[1], "-c");
@@ -1018,7 +1113,7 @@ mod tests {
     #[test]
     fn build_ssh_with_terminal_exec_flag_prefixes_it() {
         let term = TerminalDef { program: "konsole", exec: &["-e"] };
-        let spec = build_ssh(&req_ssh_key(), Some(&term)).unwrap();
+        let spec = build_ssh(&req_ssh_key(), Some(&term), Os::Linux).unwrap();
         assert_eq!(spec.program, "konsole");
         assert_eq!(spec.args[0], "-e");
         assert_eq!(spec.args[1], "bash");
@@ -1026,7 +1121,7 @@ mod tests {
 
     #[test]
     fn hold_wrapper_quotes_and_pauses() {
-        let held = hold_wrapper(&["ssh".into(), "user@host name".into()]);
+        let held = hold_wrapper(&["ssh".into(), "user@host name".into()], Os::Linux);
         assert_eq!(held[0], "bash");
         assert_eq!(held[1], "-c");
         // El argumento con espacio va entre comillas simples.
@@ -1321,5 +1416,123 @@ mod tests {
         } else {
             assert_eq!(exts.len(), 1, "en Unix no se añaden extensiones: {exts:?}");
         }
+    }
+
+    // --- Windows: terminal, quoting de PowerShell y hold (Fase 2) ---
+
+    fn win_term() -> &'static TerminalDef {
+        &WINDOWS_TERMINALS[0]
+    }
+
+    #[test]
+    fn terminals_for_maps_each_os() {
+        assert_eq!(terminals_for(Os::Linux).len(), LINUX_TERMINALS.len());
+        assert_eq!(terminals_for(Os::Windows)[0].program, "powershell.exe");
+        // macOS sigue sin soporte: lista vacía -> `require_terminal` explica.
+        assert!(terminals_for(Os::Macos).is_empty());
+        assert!(detect_terminal(terminals_for(Os::Macos), |_| true).is_none());
+    }
+
+    #[test]
+    fn to_pwsh_line_uses_call_operator_and_quotes_every_token() {
+        let argv: Vec<String> = vec!["ssh".into(), "-i".into(), "C:/mis llaves/id".into()];
+        // Sin `&`, PowerShell trataría 'ssh' como cadena y la imprimiría.
+        assert_eq!(to_pwsh_line(&argv), "& 'ssh' '-i' 'C:/mis llaves/id'");
+        assert_eq!(to_pwsh_line(&[]), "");
+    }
+
+    // La comilla simple es el único carácter que puede cerrar el literal: se
+    // duplica. Todo lo demás queda inerte dentro de comillas simples.
+    #[test]
+    fn pwsh_quote_neutralizes_injection_from_the_vault() {
+        let hostile: Vec<String> = vec![
+            "ssh".into(),
+            "root@host'; calc.exe; #".into(),
+            "$(rm -rf /)".into(),
+            "a`b|c;d".into(),
+        ];
+        let line = to_pwsh_line(&hostile);
+        assert_eq!(
+            line,
+            "& 'ssh' 'root@host''; calc.exe; #' '$(rm -rf /)' 'a`b|c;d'"
+        );
+        // Ninguna comilla simple queda suelta: siempre en pares.
+        assert_eq!(line.matches('\'').count() % 2, 0);
+    }
+
+    #[test]
+    fn hold_wrapper_on_windows_is_a_single_powershell_script() {
+        let held = hold_wrapper(&["ssh".into(), "user@host name".into()], Os::Windows);
+        // Un solo elemento: la terminal ya aporta `-NoProfile -Command`.
+        assert_eq!(held.len(), 1, "{held:?}");
+        assert!(held[0].starts_with("& 'ssh' 'user@host name'"));
+        assert!(held[0].contains("$LASTEXITCODE"));
+        assert!(held[0].contains("Read-Host"));
+        // Nada de sintaxis POSIX filtrada.
+        assert!(!held[0].contains("read -n1"));
+        assert!(!held[0].contains("bash"));
+    }
+
+    #[test]
+    fn build_ssh_on_windows_targets_powershell() {
+        let spec = build_ssh(&req_ssh_key(), Some(win_term()), Os::Windows).unwrap();
+        assert_eq!(spec.program, "powershell.exe");
+        assert_eq!(spec.args[0], "-NoProfile");
+        assert_eq!(spec.args[1], "-Command");
+        assert_eq!(spec.args.len(), 3, "el script va en un solo argumento");
+        let script = &spec.args[2];
+        assert!(script.contains("& 'ssh' '-i' '/home/me/.ssh/id_ed25519' '-p' '2222' 'root@10.0.0.5'"));
+    }
+
+    // La regresión que motiva la fase: `plan` devolvía error para todo SSH en
+    // Windows porque solo Linux buscaba terminal.
+    #[test]
+    #[cfg(windows)]
+    fn plan_no_longer_fails_for_ssh_on_windows() {
+        let spec = plan(&req_ssh_key(), Os::Windows).expect("SSH debe planificarse en Windows");
+        assert_eq!(spec.program, "powershell.exe");
+    }
+}
+
+/// Verificación end-to-end del lanzamiento en Windows. Abre una consola de
+/// verdad, así que está marcada `#[ignore]`: se corre a mano con
+/// `cargo test --lib windows_launch -- --ignored --nocapture`.
+///
+/// Comprueba de una pasada lo que los tests puros no pueden: que
+/// `CREATE_NEW_CONSOLE` da ventana a una app GUI, que PowerShell acepta la línea
+/// que arma `to_pwsh_line`, y que un argumento con comilla simple llega como
+/// **dato** y no como código.
+#[cfg(all(test, windows))]
+mod windows_launch {
+    use super::*;
+
+    #[test]
+    #[ignore = "abre una consola real"]
+    fn spawns_a_visible_console_and_runs_the_command() {
+        let out = std::env::temp_dir().join("karto-e2e.txt");
+        let _ = std::fs::remove_file(&out);
+        let inner: Vec<String> = vec![
+            "cmd.exe".into(),
+            "/c".into(),
+            format!("echo hola d'a mundo> {}", out.display()),
+        ];
+        let term = detect_terminal(terminals_for(Os::Windows), program_in_path)
+            .expect("powershell en el PATH");
+        let spec = wrap_in_terminal(term, &hold_wrapper(&inner, Os::Windows));
+        let mut child = terminal_command(&spec.program).args(&spec.args).spawn().unwrap();
+
+        let mut got = None;
+        for _ in 0..24 {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            if let Ok(c) = std::fs::read_to_string(&out) {
+                if !c.trim().is_empty() {
+                    got = Some(c);
+                    break;
+                }
+            }
+        }
+        // La consola queda esperando el Enter del hold: se cierra aquí.
+        let _ = child.kill();
+        assert_eq!(got.as_deref().map(str::trim), Some("hola d'a mundo"));
     }
 }

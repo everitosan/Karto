@@ -35,25 +35,37 @@ por SO se añaden ahí, no en los bordes con efecto.
       existencia inyectado, así el comportamiento de Windows se prueba compilando en
       Linux). 6 tests nuevos, uno de ellos contra el `PATH` real del SO.
 
-## Fase 2 — Terminal y envoltura de comandos
+## Fase 2 — Terminal y envoltura de comandos ✅
 
-- [ ] **`WINDOWS_TERMINALS`** análogo a `LINUX_TERMINALS`, en orden de preferencia:
-      `wt.exe` (Windows Terminal) → `powershell.exe` → `cmd.exe`. Cada uno con su
-      flag de ejecución (`wt` acepta el comando suelto; `powershell -Command`;
-      `cmd /C`).
-- [ ] **`hold_wrapper` / `hold_line` por SO** (`connections.rs:114`). Hoy hardcodean
+- [x] **`WINDOWS_TERMINALS`**: acabó siendo **solo `powershell.exe`**, contra lo
+      previsto. Medido en Windows 11 + Windows Terminal 1.24: `wt` trocea la línea
+      en cada `;` y el script del hold **nunca llega a ejecutarse** (escapando
+      `\;` sí funciona, pero es apilar un segundo parser sobre datos del vault:
+      más superficie de inyección a cambio de nada). La alternativa resultó mejor:
+      lanzar PowerShell con `CREATE_NEW_CONSOLE` — Karto es GUI y no tiene consola
+      propia — y **Windows enruta esa consola nueva a `wt` solo** si el usuario lo
+      tiene como terminal predeterminada. Se obtiene su UX sin tocar su parser.
+- [x] **`hold_wrapper` / `hold_line` por SO** (`connections.rs:114`). Hoy hardcodean
       `bash -c "…; read -n1 -s -r"` para que la ventana no se cierre y se vea el
       error de `ssh`. En Windows no hay `bash`: hace falta el equivalente
       (`cmd /k`, o `powershell -NoExit` / `Read-Host`).
-- [ ] **Quoting por SO**: `to_shell_line`/`shell_quote` son POSIX (comillas simples).
-      Reutilizarlos para armar una línea de `cmd`/PowerShell escapa mal — y no es
-      cosmético, es superficie de **inyección de argumentos**. Necesita su propio
-      quoting, con tests de casos hostiles.
-- [ ] **`plan()` deja de devolver error en Windows** (`connections.rs:316`): la rama
+- [x] **Quoting por SO**: `to_pwsh_line`/`pwsh_quote` — literales de PowerShell
+      (comilla simple duplicada) más el operador de llamada `&`, necesario porque
+      un programa entrecomillado se interpretaría como cadena y se imprimiría.
+      Dentro de comillas simples PowerShell no expande `$`, backtick, `;` ni `|`,
+      así que un host/usuario/opción del vault no puede volverse código; hay test
+      con payload hostil y verificación end-to-end contra una consola real.
+- [x] **`plan()` deja de devolver error en Windows** (`connections.rs:316`): la rama
       `_ => None` es la que hoy hace fallar *toda* conexión SSH con "no se encontró
       una terminal soportada".
 
-Al cerrar esta fase, **SSH conecta en Windows** — el 80% del valor de la app.
+También se separó `terminal_command` (con `CREATE_NEW_CONSOLE`) de
+`external_command` (con `CREATE_NO_WINDOW`, que evita el parpadeo de consola al
+abrir una URL con `cmd /C start`), y `detect_tools()` del log de arranque pasó a
+listar las terminales del SO real en vez de las de Linux siempre.
+
+**SSH ya conecta en Windows** — el 80% del valor de la app. Queda pendiente
+verificarlo con la app GUI empaquetada (`tauri:dev`), no solo desde los tests.
 
 ## Fase 3 — Llaves SSH y permisos
 
