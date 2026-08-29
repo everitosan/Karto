@@ -6,6 +6,7 @@ import type { Credential } from "$domain/infra";
 import { workspaceUseCases } from "$usecases/workspace";
 import { networkContext } from "../networkContext.svelte";
 import {
+  keyIsUnreachable,
   keyOnboardingReason,
   needsKeyOnboarding,
   pickCredential,
@@ -21,6 +22,8 @@ interface Pending {
   onProvisioned?: () => void;
   /** Por qué se ofrece: el modal cambia la explicación según el caso. */
   reason: KeyOnboardingReason;
+  /** La llave no está aquí ni en el vault: no hay con qué autenticar. */
+  unreachable: boolean;
 }
 
 export const onboarding = $state<{ pending: Pending | null; busy: boolean }>({
@@ -109,6 +112,7 @@ export async function requestConnect(
       credential: credential!,
       onProvisioned,
       reason: keyOnboardingReason(credential)!,
+      unreachable: keyIsUnreachable(credential),
     };
     return;
   }

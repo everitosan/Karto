@@ -118,4 +118,10 @@ pub struct Credential {
     /// llave" de "la llave viaja con el vault", que es lo que decide si esta
     /// credencial sigue funcionando al abrir el `.karto` en otro equipo.
     pub has_vault_key: bool,
+    /// ¿El archivo de la llave existe **en este equipo**? Junto con
+    /// `has_vault_key` distingue el callejón sin salida: hay ruta, el archivo no
+    /// está aquí y el vault tampoco lo lleva, así que no hay con qué autenticar
+    /// —ni siquiera para instalar una llave nueva—. Sin esto el usuario sólo se
+    /// entera al ver un `Permission denied (publickey)` en la terminal.
+    pub key_present: bool,
 }

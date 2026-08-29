@@ -495,5 +495,6 @@
   "keyob_intro_localkey_after": ". Aquí conecta bien, pero al abrir el .karto en otro sitio la ruta no apunta a nada. Karto puede crear una llave propia usando la tuya para instalarla, sin que teclees nada: así tu llave personal nunca entra en el vault.",
   "keyob_register_title_localkey": "Crear una llave de Karto",
   "keyob_register_hint_localkey": "Se instala en el servidor usando tu llave actual como acceso. La tuya no se toca.",
-  "keyob_connect_asis": "Conectar sin cambios"
+  "keyob_connect_asis": "Conectar sin cambios",
+  "keyob_unreachable": "La llave de esta credencial no está en este equipo y el diagrama tampoco la lleva dentro, así que probablemente no haya con qué autenticar (ni para instalar una nueva). Si el servidor no admite contraseña, hazlo desde el equipo donde sí está la llave: Karto creará ahí una propia y la dejará dentro del diagrama."
 }

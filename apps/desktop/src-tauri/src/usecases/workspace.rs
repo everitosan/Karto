@@ -416,9 +416,26 @@ pub fn credential_list(conn: &Connection, node_id: &str) -> AppResult<Vec<Creden
             extras: r.get(7)?,
             // Sólo el booleano: el material no sale del backend al listar.
             has_vault_key: r.get::<_, i64>(8)? != 0,
+            key_present: false, // se rellena fuera del mapeo (toca disco)
         })
     })?;
-    Ok(rows.collect::<Result<_, _>>()?)
+    let mut creds: Vec<Credential> = rows.collect::<Result<_, _>>()?;
+    // `key_present` toca disco, así que se resuelve fuera del mapeo de filas. La
+    // ruta se traduce antes: la guardada puede venir de otro SO.
+    for c in &mut creds {
+        c.key_present = key_is_present(c.key_path.as_deref(), &c.id);
+    }
+    Ok(creds)
+}
+
+/// ¿Existe en **este equipo** el archivo de la llave de una credencial? `false`
+/// si no hay ruta, o si la ruta no se puede resolver contra este SO.
+fn key_is_present(key_path: Option<&str>, credential_id: &str) -> bool {
+    key_path
+        .filter(|k| !k.is_empty())
+        .and_then(|k| crate::usecases::connections::local_key_path(k, credential_id).ok())
+        .map(|p| std::path::Path::new(&p).is_file())
+        .unwrap_or(false)
 }
 
 /// Datos de entrada para crear/actualizar una credencial (incluye el secreto).
@@ -509,6 +526,7 @@ pub fn credential_upsert(conn: &Connection, input: CredentialInput) -> AppResult
         extras: "{}".to_string(),
         // `credential_upsert` no toca `private_key`: el flag se relee para que
         // una actualización conserve el que ya hubiera.
+        key_present: key_is_present(input.key_path, &id_for_flag),
         has_vault_key: conn
             .query_row(
                 "SELECT private_key IS NOT NULL AND private_key <> '' \

@@ -495,5 +495,6 @@
   "keyob_intro_localkey_after": ". It connects fine here, but opening the .karto elsewhere leaves the path pointing at nothing. Karto can create its own key and install it using yours, without you typing anything: your personal key never enters the vault.",
   "keyob_register_title_localkey": "Create a Karto key",
   "keyob_register_hint_localkey": "Installed on the server using your current key for access. Yours is left untouched.",
-  "keyob_connect_asis": "Connect unchanged"
+  "keyob_connect_asis": "Connect unchanged",
+  "keyob_unreachable": "This credential's key is not on this machine and the diagram does not carry it either, so there is probably nothing to authenticate with (not even to install a new one). If the server does not accept passwords, do this from the machine that has the key: Karto will create its own there and store it in the diagram."
 }

@@ -30,6 +30,7 @@
   const open = $derived(onboarding.pending !== null);
   const host = $derived(onboarding.pending?.credential.username ?? "");
   const localKey = $derived(onboarding.pending?.reason === "local-key");
+  const unreachable = $derived(onboarding.pending?.unreachable === true);
   const hostSuffix = $derived(host ? ` (${host})` : "");
 
   async function proceed() {
@@ -56,6 +57,10 @@
       {m.keyob_intro_before({ host: hostSuffix })}<strong>{m.keyob_intro_strong()}</strong>{m.keyob_intro_after()}
     {/if}
   </p>
+
+  {#if unreachable}
+    <p class="warn" role="status">{m.keyob_unreachable()}</p>
+  {/if}
 
   <div class="check">
     <Checkbox bind:checked={registerKey}>
@@ -100,6 +105,16 @@
 </Modal>
 
 <style>
+  .warn {
+    margin: 0 0 1rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid var(--karto-color-warning-border, #b4881f);
+    background: var(--karto-color-warning-bg, rgba(180, 136, 31, 0.12));
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--karto-color-text);
+  }
   .intro {
     margin: 0 0 1rem;
     font-size: 0.85rem;

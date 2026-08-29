@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Credential } from "$domain/infra";
 import {
+  keyIsUnreachable,
   keyOnboardingReason,
   needsKeyOnboarding,
   pickCredential,
@@ -19,6 +20,7 @@ function cred(overrides: Partial<Credential> = {}): Credential {
     options: null,
     extras: "{}",
     hasVaultKey: false,
+    keyPresent: true,
     ...overrides,
   };
 }
@@ -99,6 +101,37 @@ describe("needsKeyOnboarding", () => {
 
   it("false si no hay credencial", () => {
     expect(needsKeyOnboarding(undefined)).toBe(false);
+  });
+});
+
+describe("keyIsUnreachable", () => {
+  // El caso real: .karto hecho en Linux apuntando a una llave personal, abierto
+  // en otra máquina. Ni conecta, ni se puede aprovisionar desde aquí.
+  it("true si hay ruta pero la llave no está aquí ni en el vault", () => {
+    expect(
+      keyIsUnreachable(
+        cred({ keyPath: "/home/eve/.ssh/id", keyPresent: false, hasVaultKey: false }),
+      ),
+    ).toBe(true);
+  });
+
+  it("false si la llave está en este equipo", () => {
+    expect(
+      keyIsUnreachable(cred({ keyPath: "/home/eve/.ssh/id", keyPresent: true })),
+    ).toBe(false);
+  });
+
+  // El diagrama la lleva dentro: se materializa al conectar.
+  it("false si el vault trae el material", () => {
+    expect(
+      keyIsUnreachable(
+        cred({ keyPath: "/home/eve/.ssh/id", keyPresent: false, hasVaultKey: true }),
+      ),
+    ).toBe(false);
+  });
+
+  it("false sin ruta de llave (conecta por contraseña)", () => {
+    expect(keyIsUnreachable(cred({ keyPath: null, keyPresent: false }))).toBe(false);
   });
 });
 

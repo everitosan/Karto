@@ -156,9 +156,23 @@ que el vault es portable. Una llave del usuario sirve de *arranque*, no de carga
       no teclea nada. `IdentitiesOnly` es necesario: sin él `ssh` ofrece antes las
       identidades del agente y puede autenticar con otra o agotar los intentos.
       Sólo se usa si el archivo **existe** en este equipo.
-- [ ] **Marcador estable**. El comentario actual lleva `<node_id>`, que en otro
-      vault no significa nada. Si nos apoyamos en él, merece algo autodescriptivo,
-      aceptando el formato viejo para no perder las llaves ya generadas.
+- [~] **Marcador estable / reconocer llaves propias**: **descartado por ahora**.
+      Sin usuarios productivos no hay nada que migrar, y el comentario `karto:` es
+      una afirmación falsificable: reconocerlo abriría el único camino por el que
+      una llave ajena podría acabar dentro del vault. Hoy esa garantía se cumple
+      **por construcción** —`commit_if_provisioned` es el único punto que escribe
+      `private_key`, y lee la ruta que él mismo deriva de `key_path_for`, o sea la
+      llave que Karto acaba de generar—. Si algún día hace falta reconocerlas, que
+      sea por huella registrada al generarla, no por el comentario.
+- [x] **Avisar del callejón sin salida**. Hay ruta de llave, el archivo no está en
+      este equipo y el vault no lleva material: no hay con qué autenticar, ni
+      siquiera para instalar una nueva. Es lo que pasa al abrir un `.karto` cuya
+      credencial apuntaba a una llave personal del otro equipo. `key_present` en el
+      DTO + `keyIsUnreachable` lo detectan y el modal lo dice, en vez de dejar que
+      el usuario se coma un `Permission denied (publickey)` sin explicación.
+
+      Es un **aviso, no un bloqueo**: el servidor podría admitir contraseña, y eso
+      Karto no lo sabe.
 
 Dos límites que conviene no perder de vista:
 

@@ -132,4 +132,11 @@ export interface Credential {
    * `.karto` se abre en otro equipo, porque la ruta no apunta a nada allí.
    */
   hasVaultKey: boolean;
+  /**
+   * ¿El archivo de la llave existe en **este equipo**? Con `hasVaultKey` en
+   * false identifica el callejón sin salida: hay ruta, la llave no está aquí y
+   * el diagrama tampoco la lleva, así que no hay con qué autenticar — ni
+   * siquiera para instalar una nueva.
+   */
+  keyPresent: boolean;
 }

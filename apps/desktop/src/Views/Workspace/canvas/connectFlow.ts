@@ -22,6 +22,19 @@ export function pickCredential(
 export type KeyOnboardingReason = "password" | "local-key";
 
 /**
+ * ¿Esta credencial se ha quedado sin forma de autenticar? Hay ruta de llave, el
+ * archivo no está en este equipo y el diagrama no lleva el material dentro. Pasa
+ * al abrir un `.karto` hecho en otra máquina cuya credencial apuntaba a una llave
+ * personal: ni conecta, ni se puede aprovisionar una nueva desde aquí.
+ *
+ * No lo decide Karto por el usuario —el servidor podría admitir contraseña—, pero
+ * conviene avisarlo antes de que se coma un `Permission denied (publickey)`.
+ */
+export function keyIsUnreachable(cred: Credential | undefined): boolean {
+  return !!cred && cred.kind === "ssh" && !!cred.keyPath && !cred.keyPresent && !cred.hasVaultKey;
+}
+
+/**
  * Clasifica una credencial según si **el vault puede llevársela**, que es la
  * pregunta que importa para la portabilidad —distinta de "¿le falta llave?"—.
  * `null` cuando no aplica: no es SSH, o la llave ya viaja dentro del vault.
