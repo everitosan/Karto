@@ -1,0 +1,17 @@
+# Normalización de fin de línea. Sin esto, `core.autocrlf=true` en Windows marca
+# archivos como modificados sin cambio real (Cargo.toml, los schemas generados…)
+# y ensucia cada commit. LF también en el árbol de trabajo: Rust, Node y las
+# herramientas del repo lo manejan igual en los tres SO.
+* text=auto eol=lf
+
+# Scripts de shell: LF obligatorio (un CRLF los rompe al ejecutarlos).
+*.sh text eol=lf
+Makefile text eol=lf
+
+# Binarios: nunca tocar.
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.woff  binary
+*.woff2 binary

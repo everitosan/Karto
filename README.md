@@ -32,9 +32,20 @@ packages/
 
 ### Requisitos
 
-- Node ≥ 20 y pnpm
+- Node ≥ 22.13 y pnpm
 - Rust (cargo) para la app de escritorio
 - Dependencias de sistema de Tauri (Linux: webkit2gtk-4.1, gtk3, libsoup3)
+
+**Windows** — además de lo anterior, el backend no compila sin:
+
+| Requisito | Por qué |
+| --- | --- |
+| Visual Studio Build Tools (workload *Desktop development with C++*) | toolchain MSVC que usa Rust en Windows |
+| WebView2 Runtime | motor web de Tauri (ya viene en Windows 11) |
+| Perl (Strawberry Perl) y NASM, en el `PATH` | los exige `bundled-sqlcipher-vendored-openssl`, que compila OpenSSL desde fuente |
+
+El soporte de **runtime** en Windows está en curso: ver
+[windows-adapt.md](docs/specs/windows-adapt.md).
 
 ### Clientes externos (en runtime)
 
