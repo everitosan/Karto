@@ -399,7 +399,8 @@ pub fn edge_delete(conn: &Connection, id: &str) -> AppResult<()> {
 /// Lista las credenciales de un nodo **sin el secreto**.
 pub fn credential_list(conn: &Connection, node_id: &str) -> AppResult<Vec<Credential>> {
     let mut stmt = conn.prepare(
-        "SELECT id, kind, username, port, key_path, is_default, options, extras \
+        "SELECT id, kind, username, port, key_path, is_default, options, extras, \
+                private_key IS NOT NULL AND private_key <> '' \
          FROM credentials WHERE node_id = ?1 ORDER BY is_default DESC, kind",
     )?;
     let rows = stmt.query_map(params![node_id], |r| {
@@ -413,6 +414,8 @@ pub fn credential_list(conn: &Connection, node_id: &str) -> AppResult<Vec<Creden
             is_default: r.get::<_, i64>(5)? != 0,
             options: r.get(6)?,
             extras: r.get(7)?,
+            // Sólo el booleano: el material no sale del backend al listar.
+            has_vault_key: r.get::<_, i64>(8)? != 0,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
@@ -493,6 +496,7 @@ pub fn credential_upsert(conn: &Connection, input: CredentialInput) -> AppResult
             id
         }
     };
+    let id_for_flag = id.clone();
     Ok(Credential {
         id,
         node_id: input.node_id.to_string(),
@@ -503,6 +507,17 @@ pub fn credential_upsert(conn: &Connection, input: CredentialInput) -> AppResult
         is_default: input.is_default,
         options: input.options.map(str::to_string),
         extras: "{}".to_string(),
+        // `credential_upsert` no toca `private_key`: el flag se relee para que
+        // una actualización conserve el que ya hubiera.
+        has_vault_key: conn
+            .query_row(
+                "SELECT private_key IS NOT NULL AND private_key <> '' \
+                 FROM credentials WHERE id = ?1",
+                params![id_for_flag],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            != 0,
     })
 }
 
@@ -749,6 +764,63 @@ mod tests {
         let graph = graph_load(&conn, &map.id).unwrap();
         assert_eq!(graph.nodes.len(), 1);
         assert!(graph.edges.is_empty(), "la arista cae por cascada al borrar el nodo");
+    }
+
+    // `has_vault_key` distingue "tiene llave" de "la llave viaja con el vault":
+    // una credencial con key_path pero sin material deja de funcionar en cuanto
+    // el .karto se abre en otro equipo. Es un booleano derivado — el material
+    // nunca sale del backend al listar.
+    #[test]
+    fn credential_list_reports_whether_the_key_travels_in_the_vault() {
+        let conn = db();
+        let map = map_create(&conn, "Red", None).unwrap();
+        let node = node_create(&conn, &map.id, "server", "A", 0.0, 0.0).unwrap();
+        let cred = credential_upsert(
+            &conn,
+            CredentialInput {
+                id: None,
+                node_id: &node.id,
+                kind: "ssh",
+                username: Some("root"),
+                secret: None,
+                port: Some(22),
+                key_path: Some("/home/me/.ssh/id_ed25519"),
+                is_default: true,
+                options: None,
+            },
+        )
+        .unwrap();
+
+        // Ruta local, sin material: el vault no se la lleva.
+        assert!(!cred.has_vault_key, "recién creada no puede tener material");
+        assert!(!credential_list(&conn, &node.id).unwrap()[0].has_vault_key);
+
+        // Tras aprovisionar con "guardar en el vault" sí viaja.
+        conn.execute(
+            "UPDATE credentials SET private_key = 'MATERIAL' WHERE id = ?1",
+            params![cred.id],
+        )
+        .unwrap();
+        assert!(credential_list(&conn, &node.id).unwrap()[0].has_vault_key);
+
+        // Una actualización de la credencial no debe perder el flag: upsert no
+        // toca private_key, así que lo relee.
+        let updated = credential_upsert(
+            &conn,
+            CredentialInput {
+                id: Some(&cred.id),
+                node_id: &node.id,
+                kind: "ssh",
+                username: Some("admin"),
+                secret: None,
+                port: Some(22),
+                key_path: Some("/home/me/.ssh/id_ed25519"),
+                is_default: true,
+                options: None,
+            },
+        )
+        .unwrap();
+        assert!(updated.has_vault_key, "una edición no debe perder el material");
     }
 
     #[test]

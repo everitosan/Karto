@@ -113,4 +113,9 @@ pub struct Credential {
     pub options: Option<String>,
     /// Extras serializados (JSON).
     pub extras: String,
+    /// ¿El vault lleva dentro el material de la llave privada? Es un **booleano
+    /// derivado**, nunca el material: el frontend necesita distinguir "tiene
+    /// llave" de "la llave viaja con el vault", que es lo que decide si esta
+    /// credencial sigue funcionando al abrir el `.karto` en otro equipo.
+    pub has_vault_key: bool,
 }

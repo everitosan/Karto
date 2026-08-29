@@ -112,12 +112,18 @@ que en otra máquina no apunta a nada.
 La idea: que Karto **no se lleve nunca llaves que no creó**, y aun así garantice
 que el vault es portable. Una llave del usuario sirve de *arranque*, no de carga.
 
-- [ ] **Reformular el disparador**. Hoy `needsKeyOnboarding` pregunta "¿le falta
-      llave?" (`!cred.keyPath`). Debe preguntar **"¿puede el vault llevarse esta
-      credencial?"** (`!hasVaultKey`). Es una línea, pero elimina la categoría
-      "ya tiene llave, no molestes" y crea "tiene llave, pero es tuya y no viaja".
-      Requiere exponer un `hasVaultKey: boolean` en el DTO de credencial — un
-      booleano, nunca el material.
+- [x] **Reformular el disparador**. `keyOnboardingReason` sustituye a la pregunta
+      "¿le falta llave?" por **"¿puede el vault llevarse esta credencial?"**, y
+      devuelve el motivo: `password` (SSH pelada) o `local-key` (tiene llave, pero
+      sólo existe en este equipo). `has_vault_key` se expone en el DTO como
+      booleano derivado en SQL (`private_key IS NOT NULL AND <> ''`) — nunca el
+      material; `credential_upsert` lo relee para que una edición no lo pierda.
+
+      **`needsKeyOnboarding` sigue devolviendo `true` sólo para `password`.** El
+      caso `local-key` ya se detecta pero todavía no se ofrece: sustituir la llave
+      del usuario por una de Karto necesita el arranque con la llave existente
+      (más abajo). Ofrecerlo antes sería prometer un flujo a medias. Al cerrar ese
+      punto, el disparador pasa a `!== null` y con él cambia la copia del modal.
 - [ ] **Reconocer las llaves propias**. `provision()` ya genera con
       `-C karto:<node_id>`, y ese comentario queda **embebido en la llave privada**:
       se recupera con `ssh-keygen -y -f <llave>` (tercer campo). Funciona
@@ -136,9 +142,11 @@ que el vault es portable. Una llave del usuario sirve de *arranque*, no de carga
       | Con passphrase | no es de Karto → rama de generar |
       | Cualquier otra | ofrecer generar una de Karto, usando la existente como *bootstrap* |
 
-- [ ] **Bootstrap por llave existente**: `ssh-copy-id -i <nueva.pub> -o
-      IdentityFile=<la del usuario> -o IdentitiesOnly=yes`, y el usuario no teclea
-      nada. `copy_id_inner_command` necesita un parámetro más.
+- [ ] **Bootstrap por llave existente**, para que el usuario no teclee nada.
+      **Ojo, sin verificar**: la semántica de `-i` en `ssh-copy-id` es "la llave a
+      instalar", y además la usa para autenticar; combinarla con
+      `-o IdentityFile=<la del usuario> -o IdentitiesOnly=yes` hay que probarlo
+      contra un servidor real antes de darlo por bueno. No inventar los flags.
 - [ ] **Marcador estable**. El comentario actual lleva `<node_id>`, que en otro
       vault no significa nada. Si nos apoyamos en él, merece algo autodescriptivo,
       aceptando el formato viejo para no perder las llaves ya generadas.

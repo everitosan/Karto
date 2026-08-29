@@ -125,4 +125,11 @@ export interface Credential {
   options: string | null;
   // El secreto nunca viaja al frontend salvo bajo demanda explícita (revelar).
   extras: string;
+  /**
+   * ¿El vault lleva dentro el material de la llave privada? Booleano derivado,
+   * nunca la llave. Distingue "tiene llave" de "la llave viaja con el vault":
+   * una credencial con `keyPath` pero sin esto deja de funcionar en cuanto el
+   * `.karto` se abre en otro equipo, porque la ruta no apunta a nada allí.
+   */
+  hasVaultKey: boolean;
 }

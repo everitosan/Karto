@@ -13,12 +13,37 @@ export function pickCredential(
 }
 
 /**
- * ¿Conviene ofrecer configurar acceso por llave? Sí cuando la credencial es SSH
- * por contraseña (sin llave registrada). El resto (web, VNC, SSH ya con llave)
- * conecta directo.
+ * Por qué convendría ofrecer acceso por llave gestionada por Karto.
+ * - `password`: SSH sin llave ninguna.
+ * - `local-key`: SSH con llave que **sólo existe en este equipo**. Conecta bien
+ *   aquí, pero el vault no se la lleva: al abrir el `.karto` en otro sitio
+ *   `keyPath` apunta a un archivo que allí no está.
+ */
+export type KeyOnboardingReason = "password" | "local-key";
+
+/**
+ * Clasifica una credencial según si **el vault puede llevársela**, que es la
+ * pregunta que importa para la portabilidad —distinta de "¿le falta llave?"—.
+ * `null` cuando no aplica: no es SSH, o la llave ya viaja dentro del vault.
+ */
+export function keyOnboardingReason(
+  cred: Credential | undefined,
+): KeyOnboardingReason | null {
+  if (!cred || cred.kind !== "ssh" || cred.hasVaultKey) return null;
+  return cred.keyPath ? "local-key" : "password";
+}
+
+/**
+ * ¿Se ofrece el modal de onboarding al conectar?
+ *
+ * De momento **sólo** para el caso `password`, que es el flujo que funciona hoy.
+ * El caso `local-key` ya se detecta (ver `keyOnboardingReason`) pero no se ofrece
+ * todavía: sustituir la llave del usuario por una de Karto necesita el arranque
+ * con la llave existente, que aún no está. Ofrecerlo antes sería prometer un
+ * flujo a medias.
  */
 export function needsKeyOnboarding(cred: Credential | undefined): boolean {
-  return !!cred && cred.kind === "ssh" && !cred.keyPath;
+  return keyOnboardingReason(cred) === "password";
 }
 
 /** Opciones elegidas en el modal de onboarding de llave. */
