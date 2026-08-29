@@ -723,9 +723,14 @@ fn strip_appimage_env(cmd: &mut std::process::Command) {
     }
 }
 
-/// `Command` para un proceso **externo** (terminal, navegador, visor VNC) con el
-/// entorno del AppImage ya saneado (ver [`strip_appimage_env`]).
-fn external_command(program: &str) -> std::process::Command {
+/// `Command` para un proceso hijo que **no debe mostrar ventana**: el abridor de
+/// URL/VNC, `ssh-keygen`, un script con la salida capturada, un ping de cliente.
+///
+/// Todo hijo debe salir por aquí o por [`terminal_command`], nunca por
+/// `Command::new` a secas: el entorno del AppImage hay que sanearlo siempre (ver
+/// [`strip_appimage_env`]) y en Windows un ejecutable de consola lanzado desde
+/// una app GUI **abre una consola propia** si no se le dice lo contrario.
+pub fn external_command(program: &str) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
     strip_appimage_env(&mut cmd);
     // Windows: el abridor de URL/VNC pasa por `cmd /C start`, que sin esto
@@ -742,12 +747,15 @@ fn external_command(program: &str) -> std::process::Command {
 /// `Command` para un proceso que **debe verse en una consola**: la terminal con
 /// `ssh` o el cliente de BD.
 ///
-/// En Windows es imprescindible `CREATE_NEW_CONSOLE`: Karto es una app GUI y no
-/// tiene consola propia, así que sin la bandera el proceso no tendría dónde
-/// dibujarse. Con ella Windows crea una consola nueva — y si el usuario tiene
-/// Windows Terminal como predeterminada del sistema, la enruta ahí sola. En
-/// Linux/macOS el emulador de terminal ya abre su propia ventana.
-fn terminal_command(program: &str) -> std::process::Command {
+/// En Windows es imprescindible `CREATE_NEW_CONSOLE`, y por partida doble: sin
+/// ella el hijo **hereda la consola del padre**, así que en `tauri dev` los
+/// prompts de `ssh` (la huella del host, la contraseña) salen mezclados en la
+/// terminal de desarrollo, y en la app empaquetada —que no tiene consola— no
+/// salen en ninguna parte y la conexión parece colgada. Con la bandera, Windows
+/// crea una consola nueva y, si el usuario tiene Windows Terminal como
+/// predeterminada del sistema, la enruta ahí sola. En Linux/macOS el emulador de
+/// terminal ya abre su propia ventana.
+pub fn terminal_command(program: &str) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
     strip_appimage_env(&mut cmd);
     #[cfg(windows)]

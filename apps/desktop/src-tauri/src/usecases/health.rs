@@ -174,9 +174,9 @@ pub fn client_ping_command(
 /// timeout. Éxito (exit 0) → `reachable` (con latencia); fallo/timeout →
 /// `unreachable`. La parte **lenta**: la corre el adaptador fuera del hilo main.
 pub fn run_client_ping(cmd: crate::usecases::scripts::DbCommand) -> HealthStatus {
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
     let started = Instant::now();
-    let mut child = match Command::new(&cmd.program)
+    let mut child = match crate::usecases::connections::external_command(&cmd.program)
         .args(&cmd.args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

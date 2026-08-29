@@ -151,7 +151,7 @@ pub fn provision(
             }
         }
         let argv = keygen_command(&key_path_str, &format!("karto:{node_id}"));
-        let status = std::process::Command::new(&argv[0])
+        let status = crate::usecases::connections::external_command(&argv[0])
             .args(&argv[1..])
             .status()
             .map_err(|e| AppError::Other(format!("no se pudo ejecutar ssh-keygen: {e}")))?;
@@ -197,7 +197,10 @@ pub fn provision(
         &marker.to_string_lossy(),
         Os::current(),
     ))?;
-    std::process::Command::new(&spec.program)
+    // `terminal_command`, no `Command::new`: el hijo necesita consola **propia**.
+    // Heredando la del padre, los prompts de ssh salen donde no deben (o en
+    // ninguna parte, en la app empaquetada, que no tiene consola).
+    crate::usecases::connections::terminal_command(&spec.program)
         .args(&spec.args)
         .spawn()
         .map_err(|e| AppError::Other(format!("no se pudo lanzar el aprovisionamiento: {e}")))?;

@@ -458,7 +458,8 @@ pub fn run_target(
         Ok(a) => a,
         Err(e) => return emit_error(node_id, &e.to_string(), emit),
     };
-    let mut cmd = Command::new(&argv[0]);
+    // La salida se captura, así que este proceso no debe abrir ninguna ventana.
+    let mut cmd = crate::usecases::connections::external_command(&argv[0]);
     cmd.args(&argv[1..]);
     run_streamed(cmd, "ssh", node_id, body, emit);
 }
@@ -563,7 +564,7 @@ pub fn run_db_target(
             emit,
         );
     }
-    let mut cmd = Command::new(&spec.program);
+    let mut cmd = crate::usecases::connections::external_command(&spec.program);
     cmd.args(&spec.args);
     if let Some((k, v)) = &spec.env {
         cmd.env(k, v);

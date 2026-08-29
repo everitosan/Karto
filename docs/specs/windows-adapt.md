@@ -222,6 +222,28 @@ Verificado end-to-end en Windows (`windows_foreign_vault`, `#[ignore]`):
 `/home/eve/.ssh/karto/cfv1_ed25519` → `C:\\Users\\rockf\\.ssh\\karto\\cfv1_ed25519`,
 con ACL correcta y aceptada por el OpenSSH del sistema.
 
+### Fase 3b.2 — Todo hijo por los helpers de spawn ✅
+
+Reportado probando: al aprovisionar, el prompt de huella de `ssh` salía en la
+terminal donde corre `pnpm tauri dev`, no en una consola propia.
+
+- [x] `provision()` seguía usando `Command::new` a secas: el hijo heredaba la
+      consola del padre. En `tauri dev` eso mezcla los prompts con los logs de
+      vite; en la **app empaquetada**, que no tiene consola, no salen en ninguna
+      parte y el aprovisionamiento parece colgado. Ahora usa `terminal_command`.
+- [x] Mismo problema, al revés, en `scripts::run_target`, `run_db_target`,
+      `health::run_client_ping` y el `ssh-keygen` del aprovisionamiento: capturan
+      o descartan la salida, pero en Windows un ejecutable de consola lanzado
+      desde una app GUI **abre una consola propia** si no se le dice lo
+      contrario. Pasan por `external_command` (`CREATE_NO_WINDOW`).
+- [x] Efecto colateral en Linux: esos tres puntos tampoco saneaban el entorno
+      del AppImage, que era lo que arregló `702b26b` para las conexiones y se
+      quedó fuera aquí. `external_command` ya lo hace.
+
+Regla, documentada en los helpers: **ningún hijo se lanza con `Command::new` a
+secas**; o `terminal_command` (necesita consola) o `external_command` (no debe
+mostrar ventana).
+
 ## Fase 4 — Sondeo de facts
 
 - [ ] **El multiplexado SSH no existe en Windows.** `ssh_facts_line`
