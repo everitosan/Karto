@@ -200,6 +200,28 @@ Dos límites que conviene no perder de vista:
       Si la confirmación no llega, no se hace nada: la credencial se queda como
       estaba, que es justo lo correcto cuando `ssh-copy-id` falló.
 
+### Fase 3b.1 — Rutas de llave entre SO ✅
+
+Salió al ir a probar un `.karto` exportado desde Linux en Windows, que es
+exactamente el escenario que justifica guardar el material en el vault.
+
+- [x] Una ruta POSIX **no es absoluta en Windows**: se resuelve contra la unidad
+      actual, así que `materialize_key` escribía en `C:\\home\\eve\\...` —basura en
+      la raíz del disco— y `ssh -i` no encontraba la llave. El caso simétrico
+      (`C:\\Users\\...` abierto en Linux) falla igual.
+- [x] Y `icacls` remataba: lee un argumento que empieza por `/` como modificador
+      suyo (`/reset`, `/grant`…), así que devolvía error de sintaxis (exit 87) en
+      vez de aplicar la ACL. Ahora `restrict_to_owner` exige ruta absoluta y lo
+      dice claro.
+- [x] `is_usable_key_path` + `local_key_path`: si la ruta guardada sirve en este
+      SO se respeta; si viene de otro se remapea a `~/.ssh/karto/<cred>_ed25519`.
+      `is_absolute()` responde la pregunta correcta en cada plataforma, así que
+      cubre las dos direcciones sin ramas por SO.
+
+Verificado end-to-end en Windows (`windows_foreign_vault`, `#[ignore]`):
+`/home/eve/.ssh/karto/cfv1_ed25519` → `C:\\Users\\rockf\\.ssh\\karto\\cfv1_ed25519`,
+con ACL correcta y aceptada por el OpenSSH del sistema.
+
 ## Fase 4 — Sondeo de facts
 
 - [ ] **El multiplexado SSH no existe en Windows.** `ssh_facts_line`
