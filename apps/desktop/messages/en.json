@@ -1,10 +1,8 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
-
   "language_name": "English",
   "settings_language": "Language",
   "settings_language_hint": "The interface language. Defaults to the operating system's.",
-
   "common_back": "Back",
   "common_cancel": "Cancel",
   "common_save": "Save",
@@ -14,18 +12,14 @@
   "common_close": "Close",
   "common_new": "New",
   "common_search": "Search",
-
   "auth_password_master": "Master password",
-
   "dialog_vault_filter": "Karto vault",
   "dialog_create_vault": "Create vault",
   "dialog_save_backup": "Save encrypted backup",
   "dialog_export_subset": "Export selection to a new vault",
   "dialog_open_vault": "Open vault",
   "dialog_pick_ssh_key": "Choose SSH key",
-
   "password_toggle": "Show/hide",
-
   "welcome_tagline": "Your whole infrastructure universe in a single encrypted map.",
   "welcome_forget_recent": "Remove from recents",
   "welcome_open_existing": "Open existing vault",
@@ -35,17 +29,14 @@
   "welcome_creating": "Creating…",
   "welcome_create_submit": "Create and encrypt",
   "welcome_error_password": "The password must be at least 8 characters and match.",
-
   "unlock_title": "Unlock",
   "unlock_wrong_password": "Wrong password.",
   "unlock_unlocking": "Unlocking…",
   "unlock_submit": "Unlock",
-
   "nav_sections": "Sections",
   "nav_diagrams": "Diagrams",
   "nav_scripts": "Scripts",
   "nav_config": "Settings",
-
   "topbar_sidebar_pin": "Pin sidebar",
   "topbar_sidebar_collapse": "Collapse sidebar",
   "topbar_close_vault": "Close vault (back to selection)",
@@ -54,13 +45,10 @@
   "window_minimize": "Minimize",
   "window_maximize": "Maximize",
   "window_restore": "Restore",
-
   "contextbar_active": "Active network context",
   "contextbar_manage": "Manage contexts",
-
   "common_collapse": "Collapse",
   "common_expand": "Expand",
-
   "sidebar_new_folder": "New folder",
   "sidebar_new_map": "New diagram",
   "sidebar_import_ssh": "Import from ~/.ssh/config",
@@ -69,30 +57,25 @@
   "sidebar_empty": "No diagrams yet. Create a folder or a diagram with the buttons above.",
   "sidebar_delete_folder_confirm": "Delete the folder “{name}” and all its contents?",
   "sidebar_delete_map_confirm": "Delete the diagram “{name}”?",
-
   "common_password": "Password",
   "common_copy": "Copy",
   "common_edit": "Edit",
   "common_clear": "Clear",
   "common_saving": "Saving…",
   "common_accept": "OK",
-
   "palette_title": "Nodes",
   "palette_search": "Search type…",
   "palette_no_matches": "No matches for “{query}”.",
   "palette_drag_hint": "Drag a type onto the canvas.",
-
   "search_placeholder": "Search by IP, host or label…",
   "search_clear": "Clear search",
   "search_no_results": "No results",
-
   "menu_connect": "Connect",
   "menu_connect_error": "Could not connect",
   "menu_no_credentials": "No credentials",
   "menu_check_status": "Check status",
   "menu_delete_node": "Delete node",
   "menu_default_suffix": "(default)",
-
   "props_label": "Label",
   "props_connect_default_title": "Connect with the default credential",
   "props_open_url_title": "Open {url}",
@@ -119,7 +102,6 @@
   "props_notes_view": "View",
   "props_notes_placeholder": "Markdown: **bold**, lists, [links](url)…",
   "props_notes_empty": "No notes yet.",
-
   "cred_add_title": "Add credential",
   "cred_edit_title": "Edit credential",
   "cred_type": "Type",
@@ -134,7 +116,6 @@
   "cred_ssh_options_placeholder": "One per line, e.g.:\nServerAliveInterval=60\nConnectTimeout=10\nProxyJump bastion",
   "cred_ssh_options_hint": "Each line is passed as <code>-o &lt;option&gt;</code> to ssh.",
   "cred_use_default": "Use as default",
-
   "keyob_title": "Password-based SSH connection",
   "keyob_intro_before": "This credential{host} connects with a password. You can switch to ",
   "keyob_intro_strong": "key-based access",
@@ -151,13 +132,11 @@
   "keyob_processing": "Processing…",
   "keyob_setup_connect": "Set up and connect",
   "keyob_connect_password": "Connect with password",
-
   "trust_title": "Custom connection template",
   "trust_intro": "This vault brings a <strong>connection template</strong> that will run the following command on your machine. Review it: if you don't recognize this vault or the command, <strong>cancel</strong>.",
   "trust_note": "If you trust this vault, your decision is remembered on this machine and you won't be asked again.",
   "trust_connecting": "Connecting…",
   "trust_confirm": "Trust and run",
-
   "export_title": "Export selection",
   "export_lead_one": "<strong>{count}</strong> node and its connections will be exported to a new <code>.karto</code>, encrypted with its own password (to share without revealing your master password).",
   "export_lead_other": "<strong>{count}</strong> nodes and the connections between them will be exported to a new <code>.karto</code>, encrypted with its own password (to share without revealing your master password).",
@@ -171,7 +150,6 @@
   "export_error_mismatch": "The confirmation does not match.",
   "export_exporting": "Exporting…",
   "export_submit": "Export…",
-
   "flow_edge_default": "Curved",
   "flow_edge_smoothstep": "Smooth step",
   "flow_edge_step": "Stepped",
@@ -190,11 +168,9 @@
   "flow_export_selection": "Export selection",
   "flow_export_png": "PNG (image)",
   "flow_export_svg": "SVG (vector)",
-
   "common_name": "Name",
   "common_add": "Add",
   "common_or": "or",
-
   "settings_tab_general": "General",
   "settings_tab_about": "About",
   "settings_tab_security": "Security",
@@ -202,7 +178,6 @@
   "settings_tab_templates": "Templates",
   "settings_tab_shortcuts": "Shortcuts",
   "settings_tab_diagnostics": "Diagnostics",
-
   "about_report_issue": "Report an issue",
   "about_open_error": "Could not open the link.",
   "about_made_by": "Made by",
@@ -212,7 +187,6 @@
   "about_opensource_after": ").",
   "about_support_hint": "If you find it useful, you can buy me a coffee to support its development.",
   "about_links": "Links",
-
   "sec_pw_empty": "The new password cannot be empty.",
   "sec_pw_updated": "Master password updated.",
   "sec_pw_wrong": "The current password is incorrect.",
@@ -225,14 +199,12 @@
   "sec_pw_confirm_new": "Confirm new password",
   "sec_changing": "Changing…",
   "sec_change_pw": "Change password",
-
   "backup_ok": "Backup saved successfully.",
   "backup_error": "Could not write the backup (does the file already exist?).",
   "backup_title": "Encrypted backup",
   "backup_hint_before": "Generates a ",
   "backup_hint_after": " file encrypted with the current password. Keep it somewhere safe: if you forget the password, the data is unrecoverable.",
   "backup_export_btn": "Export encrypted backup…",
-
   "tpl_hint_placeholders": "Internal command with placeholders",
   "tpl_hint_rest": "The library is machine-local; when you <strong>link</strong> a template it's copied to the vault and travels with the <code>.karto</code> (SSH on Linux for now).",
   "tpl_linked_tag": "linked to vault",
@@ -241,7 +213,6 @@
   "tpl_linked_heading": "Linked in this vault",
   "tpl_unlink": "Unlink",
   "tpl_command_placeholder": "Command with placeholders",
-
   "diag_read_error": "Could not read the log configuration.",
   "diag_level_updated": "Log level updated.",
   "diag_level_error": "Could not change the log level.",
@@ -257,13 +228,11 @@
   "diag_level_info_hint": "Information about common actions.",
   "diag_level_warning_hint": "Warnings and errors (default).",
   "diag_level_error_hint": "Errors only.",
-
   "shortcut_section_diagram": "Diagram",
   "shortcut_key_delete": "Del",
   "shortcut_key_backspace": "Backspace",
   "shortcut_delete_action": "Delete the selected node or connection",
   "shortcut_esc_action": "Close the context menu",
-
   "scripts_diagram": "Diagram",
   "scripts_select_diagram": "— select a diagram —",
   "scripts_run_mode": "Run mode",
@@ -299,14 +268,12 @@
   "scripts_confirm_del_folder_after": "? Its scripts are not deleted: they will be left without a folder.",
   "scripts_move_to": "Move to",
   "scripts_no_folder": "No folder",
-
   "ctx_title": "Network contexts",
   "ctx_hint": "A context is a network point of view (office, VPN, home…). Each node stores its address per context; when you change the active context, the whole diagram uses the right address without editing node by node.",
   "ctx_min_one": "There must be at least one context.",
   "ctx_delete_confirm": "Delete the context “{name}”? Its addresses on the nodes will be lost.",
   "ctx_delete_title": "Delete context",
   "ctx_new_placeholder": "New context (e.g. VPN)",
-
   "ssh_import_title": "Import from SSH config",
   "ssh_browse_title": "Choose SSH config file",
   "ssh_drop_aria": "Drop an SSH config file",
@@ -330,7 +297,6 @@
   "ssh_import_action": "Import",
   "ssh_hosts_map_default": "SSH Hosts",
   "ssh_hosts_map_named": "Hosts {name}",
-
   "category_network": "Network",
   "category_security": "Security",
   "category_identity": "Identity",
@@ -343,7 +309,6 @@
   "category_external": "External",
   "category_client": "Client / actor",
   "category_grouping": "Groups",
-
   "nodeKind_internet": "Internet",
   "nodeKind_router": "Router",
   "nodeKind_switch": "Switch",
@@ -388,7 +353,6 @@
   "nodeKind_workstation": "Workstation",
   "nodeKind_mobile": "Mobile",
   "nodeKind_zone": "Zone / area",
-
   "cp_notas": "Notes",
   "cp_asn_rango": "ASN / range",
   "cp_marca_modelo": "Brand / model",
@@ -524,5 +488,12 @@
   "co_azul": "Blue",
   "co_ambar": "Amber",
   "co_rosa": "Pink",
-  "co_violeta": "Violet"
+  "co_violeta": "Violet",
+  "keyob_title_localkey": "This key does not travel with the diagram",
+  "keyob_intro_localkey_before": "This credential{host} uses a key that ",
+  "keyob_intro_localkey_strong": "only exists on this machine",
+  "keyob_intro_localkey_after": ". It connects fine here, but opening the .karto elsewhere leaves the path pointing at nothing. Karto can create its own key and install it using yours, without you typing anything: your personal key never enters the vault.",
+  "keyob_register_title_localkey": "Create a Karto key",
+  "keyob_register_hint_localkey": "Installed on the server using your current key for access. Yours is left untouched.",
+  "keyob_connect_asis": "Connect unchanged"
 }

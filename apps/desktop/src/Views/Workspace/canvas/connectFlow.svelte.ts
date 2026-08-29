@@ -1,15 +1,17 @@
 // Orquestación del flujo de conexión con onboarding de llave SSH.
 // Un único estado compartido (module-level) permite que el panel de propiedades
 // y el menú contextual disparen la conexión, y que un solo modal —montado en el
-// Canvas— pida las opciones cuando la credencial es SSH por contraseña.
+// Canvas— pida las opciones cuando el vault no puede llevarse la credencial.
 import type { Credential } from "$domain/infra";
 import { workspaceUseCases } from "$usecases/workspace";
 import { networkContext } from "../networkContext.svelte";
 import {
+  keyOnboardingReason,
   needsKeyOnboarding,
   pickCredential,
   templateConfirmCommand,
   type KeyOnboardingChoice,
+  type KeyOnboardingReason,
 } from "./connectFlow";
 
 interface Pending {
@@ -17,6 +19,8 @@ interface Pending {
   credential: Credential;
   /** Se invoca tras aprovisionar (p. ej. recargar credenciales del panel). */
   onProvisioned?: () => void;
+  /** Por qué se ofrece: el modal cambia la explicación según el caso. */
+  reason: KeyOnboardingReason;
 }
 
 export const onboarding = $state<{ pending: Pending | null; busy: boolean }>({
@@ -100,7 +104,12 @@ export async function requestConnect(
 ): Promise<void> {
   const credential = pickCredential(credentials, credentialId);
   if (needsKeyOnboarding(credential)) {
-    onboarding.pending = { nodeId, credential: credential!, onProvisioned };
+    onboarding.pending = {
+      nodeId,
+      credential: credential!,
+      onProvisioned,
+      reason: keyOnboardingReason(credential)!,
+    };
     return;
   }
   const connected = await connectOrConfirm(nodeId, credentialId);

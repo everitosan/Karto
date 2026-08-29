@@ -199,7 +199,7 @@ pub fn hold_line(line: &str, os: Os) -> Vec<String> {
 /// comilla interna duplicada. Dentro de comillas simples PowerShell no expande
 /// nada (`$`, backtick, `;`, `|`), así que un valor traído del vault —host,
 /// usuario, ruta de llave, opción SSH— no puede convertirse en código.
-fn pwsh_quote(arg: &str) -> String {
+pub fn pwsh_quote(arg: &str) -> String {
     format!("'{}'", arg.replace('\'', "''"))
 }
 
@@ -376,7 +376,7 @@ pub fn build_ssh_with_facts(
     Ok(wrap_in_terminal(require_terminal(terminal)?, &held))
 }
 
-fn require_terminal(terminal: Option<&TerminalDef>) -> AppResult<&TerminalDef> {
+pub fn require_terminal(terminal: Option<&TerminalDef>) -> AppResult<&TerminalDef> {
     terminal.ok_or_else(|| {
         AppError::Other(match Os::current() {
             Os::Linux => "no se encontró una terminal soportada (instala gnome-terminal, konsole, kitty…)".into(),

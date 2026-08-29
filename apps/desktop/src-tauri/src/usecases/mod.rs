@@ -9,6 +9,7 @@ pub mod diagnostics;
 pub mod export_subset;
 pub mod facts;
 pub mod health;
+pub mod key_install;
 pub mod scripts;
 pub mod settings;
 pub mod ssh_import;

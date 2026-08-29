@@ -119,11 +119,9 @@ que el vault es portable. Una llave del usuario sirve de *arranque*, no de carga
       booleano derivado en SQL (`private_key IS NOT NULL AND <> ''`) — nunca el
       material; `credential_upsert` lo relee para que una edición no lo pierda.
 
-      **`needsKeyOnboarding` sigue devolviendo `true` sólo para `password`.** El
-      caso `local-key` ya se detecta pero todavía no se ofrece: sustituir la llave
-      del usuario por una de Karto necesita el arranque con la llave existente
-      (más abajo). Ofrecerlo antes sería prometer un flujo a medias. Al cerrar ese
-      punto, el disparador pasa a `!== null` y con él cambia la copia del modal.
+      `needsKeyOnboarding` ya es `!== null`: se ofrecen los dos casos, y el modal
+      cambia título, explicación y botón según el motivo. En `local-key` viene
+      marcado "guardar en el vault", porque ahí la portabilidad **es** el objetivo.
 - [ ] **Reconocer las llaves propias**. `provision()` ya genera con
       `-C karto:<node_id>`, y ese comentario queda **embebido en la llave privada**:
       se recupera con `ssh-keygen -y -f <llave>` (tercer campo). Funciona
@@ -142,11 +140,22 @@ que el vault es portable. Una llave del usuario sirve de *arranque*, no de carga
       | Con passphrase | no es de Karto → rama de generar |
       | Cualquier otra | ofrecer generar una de Karto, usando la existente como *bootstrap* |
 
-- [ ] **Bootstrap por llave existente**, para que el usuario no teclee nada.
-      **Ojo, sin verificar**: la semántica de `-i` en `ssh-copy-id` es "la llave a
-      instalar", y además la usa para autenticar; combinarla con
-      `-o IdentityFile=<la del usuario> -o IdentitiesOnly=yes` hay que probarlo
-      contra un servidor real antes de darlo por bueno. No inventar los flags.
+- [x] **Fuera `ssh-copy-id`, instalación directa** (`usecases/key_install.rs`).
+      La duda sobre los flags de `ssh-copy-id` se resuelve no usándolo: un `ssh` a
+      secas con el script remoto como último elemento del argv (mismo patrón que
+      `facts::remote_script`). Hace lo que hacía él —`umask 077`, crear `~/.ssh`
+      con 700, y `grep -qxF` para no duplicar la entrada al reaprovisionar— y de
+      paso **desaparece la dependencia que no existe en Windows**: un solo camino
+      para los tres SO.
+
+      La pública se incrusta entre comillas simples en el script remoto, así que
+      se rechaza una que traiga comilla o salto de línea. Las de Karto nunca las
+      traen; es red de seguridad ante una pública de origen inesperado.
+- [x] **Bootstrap por llave existente**: `ssh -i <la del usuario>
+      -o IdentitiesOnly=yes` para autenticarse e instalar la nueva, y el usuario
+      no teclea nada. `IdentitiesOnly` es necesario: sin él `ssh` ofrece antes las
+      identidades del agente y puede autenticar con otra o agotar los intentos.
+      Sólo se usa si el archivo **existe** en este equipo.
 - [ ] **Marcador estable**. El comentario actual lleva `<node_id>`, que en otro
       vault no significa nada. Si nos apoyamos en él, merece algo autodescriptivo,
       aceptando el formato viejo para no perder las llaves ya generadas.
@@ -164,10 +173,12 @@ Dos límites que conviene no perder de vista:
   generar— no cubre el caso interesante ("llave de Karto que *este* vault no
   conoce": otro vault, un backup, la credencial recreada), así que en todo caso
   sería un complemento: huella = certeza, comentario = probable.
-- [ ] **Aprovisionamiento en Windows** (heredado de la Fase 3): `ssh-copy-id` no
-      viene con el OpenSSH de Windows → `type <pub> | ssh <host> "cat >>
-      ~/.ssh/authorized_keys"`. Esta fase lo vuelve el camino principal para tener
-      un vault portable, así que sube de prioridad.
+- [x] **Aprovisionamiento en Windows** (heredado de la Fase 3): resuelto de paso
+      al quitar `ssh-copy-id`. `launch_in_terminal` deja de rechazar Windows y el
+      encadenado del script se hace por SO — **Windows PowerShell 5.1 no tiene
+      `&&`** (llegó en PowerShell 7), así que allí la condición se escribe con
+      `$LASTEXITCODE` y el marcador con `New-Item`. Falta probarlo contra un
+      servidor real desde Windows.
 
 ### Fase 3b.0 — Atomicidad del aprovisionamiento ✅
 

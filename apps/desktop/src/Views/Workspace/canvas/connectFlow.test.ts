@@ -80,10 +80,16 @@ describe("needsKeyOnboarding", () => {
     expect(needsKeyOnboarding(cred({ keyPath: null }))).toBe(true);
   });
 
-  // Detectado como `local-key`, pero todavía no se ofrece: falta el arranque con
-  // la llave existente. Ofrecerlo antes sería prometer un flujo a medias.
-  it("false (aún) para una llave local no portable", () => {
-    expect(needsKeyOnboarding(cred({ keyPath: "/home/me/.ssh/id" }))).toBe(false);
+  // Ya se ofrece: la llave del usuario sirve de arranque para instalar una de
+  // Karto, y es esa —no la suya— la que acaba viajando en el vault.
+  it("true para una llave local que el vault no se lleva", () => {
+    expect(needsKeyOnboarding(cred({ keyPath: "/home/me/.ssh/id" }))).toBe(true);
+  });
+
+  it("false si la llave ya viaja dentro del vault", () => {
+    expect(
+      needsKeyOnboarding(cred({ keyPath: "/home/me/.ssh/id", hasVaultKey: true })),
+    ).toBe(false);
   });
 
   it("false para credenciales no SSH", () => {

@@ -15,12 +15,12 @@
 use crate::domain::{ConnectionKind, ConnectionRequest, Os};
 use crate::error::{AppError, AppResult};
 use crate::usecases::connections::{
-    detect_terminal, hold_line, program_in_path, resolve, ssh_inner_command, to_shell_line,
-    wrap_in_terminal, LaunchSpec, LINUX_TERMINALS,
+    detect_terminal, hold_line, program_in_path, pwsh_quote, require_terminal, resolve,
+    ssh_inner_command, terminals_for, to_pwsh_line, to_shell_line, wrap_in_terminal, LaunchSpec,
 };
 use crate::usecases::ssh_import::ssh_dir;
 use rusqlite::{params, Connection};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Opciones del aprovisionamiento (mapean los checkboxes de la UI).
 #[derive(Debug, Clone, Copy, Default)]
@@ -46,30 +46,6 @@ pub fn keygen_command(key_path: &str, comment: &str) -> Vec<String> {
     ]
 }
 
-/// argv **interno** de `ssh-copy-id` (luego se envuelve en terminal + hold para
-/// que el usuario teclee la contraseña y pueda ver el resultado).
-pub fn copy_id_inner_command(
-    pub_key_path: &str,
-    user: Option<&str>,
-    host: &str,
-    port: Option<u16>,
-    ssh_options: &[String],
-) -> Vec<String> {
-    let mut cmd = vec!["ssh-copy-id".to_string(), "-i".into(), pub_key_path.into()];
-    if let Some(port) = port {
-        cmd.push("-p".into());
-        cmd.push(port.to_string());
-    }
-    for opt in ssh_options {
-        cmd.push("-o".into());
-        cmd.push(opt.clone());
-    }
-    cmd.push(match user {
-        Some(u) => format!("{u}@{host}"),
-        None => host.to_string(),
-    });
-    cmd
-}
 
 /// Directorio gestionado por Karto para sus llaves: `~/.ssh/karto`.
 pub fn karto_keys_dir() -> Option<PathBuf> {
@@ -92,44 +68,44 @@ pub fn marker_path(credential_id: &str) -> PathBuf {
     std::env::temp_dir().join(format!("karto-provision-{credential_id}.ok"))
 }
 
-/// Script de shell que **encadena** `ssh-copy-id`, el marcador de éxito y la
-/// conexión por llave: copia la pública (el usuario teclea la contraseña) y, si
-/// tiene éxito, deja la marca y abre la sesión ya con la llave.
+/// Script que encadena **instalar la llave**, el marcador de éxito y la sesión
+/// interactiva ya con la llave nueva.
 ///
-/// El `touch` va **entre** la copia y la sesión interactiva a propósito: así la
-/// marca aparece en cuanto la copia termina, sin esperar a que el usuario cierre
-/// la terminal. Función pura y testeable.
-pub fn onboarding_script(copy_id: &[String], ssh_key: &[String], marker: &str) -> String {
-    format!(
-        "{} && touch {} && {}",
-        to_shell_line(copy_id),
-        to_shell_line(&[marker.to_string()]),
-        to_shell_line(ssh_key)
-    )
+/// El marcador va **entre** la instalación y la sesión a propósito: así aparece
+/// en cuanto la copia acaba, sin esperar a que el usuario cierre la terminal.
+///
+/// El encadenado difiere por SO y no es cosmético: Windows PowerShell 5.1 —el que
+/// trae Windows de serie— **no tiene el operador `&&`** (llegó en PowerShell 7),
+/// así que la condición se escribe con `$LASTEXITCODE`.
+pub fn onboarding_script(
+    install: &[String],
+    ssh_key: &[String],
+    marker: &str,
+    os: Os,
+) -> String {
+    match os {
+        Os::Windows => format!(
+            "{}; if ($LASTEXITCODE -eq 0) {{ New-Item -ItemType File -Force -Path {} | Out-Null; {} }}",
+            to_pwsh_line(install),
+            pwsh_quote(marker),
+            to_pwsh_line(ssh_key)
+        ),
+        _ => format!(
+            "{} && touch {} && {}",
+            to_shell_line(install),
+            to_shell_line(&[marker.to_string()]),
+            to_shell_line(ssh_key)
+        ),
+    }
 }
 
-/// Envuelve un script en la terminal del SO (con `bash -c "…; read"`).
+/// Envuelve el script en la terminal del SO. macOS sigue sin soporte: su lista
+/// de terminales está vacía y `require_terminal` da el error explicativo.
 fn launch_in_terminal(script: &str) -> AppResult<LaunchSpec> {
-    // El script viene de `onboarding_script`, en sintaxis POSIX y con
-    // `ssh-copy-id`, que no existe en el OpenSSH de Windows: por eso el hold se
-    // pide para Linux y el resto de SO sigue rechazado (ver Fase 3 del plan).
-    let held = hold_line(script, Os::Linux);
-    match Os::current() {
-        Os::Linux => {
-            let term = detect_terminal(LINUX_TERMINALS, program_in_path).ok_or_else(|| {
-                AppError::Other(
-                    "no se encontró una terminal soportada (instala gnome-terminal, konsole, kitty…)"
-                        .into(),
-                )
-            })?;
-            Ok(wrap_in_terminal(term, &held))
-        }
-        // mac/Windows: Fase 3 de docs/specs/windows-adapt.md (Windows necesita
-        // además sustituir `ssh-copy-id`, que no viene con su OpenSSH).
-        _ => Err(AppError::Other(
-            "el aprovisionamiento de llave aún no está soportado en este sistema operativo".into(),
-        )),
-    }
+    let os = Os::current();
+    let held = hold_line(script, os);
+    let term = detect_terminal(terminals_for(os), program_in_path);
+    Ok(wrap_in_terminal(require_terminal(term)?, &held))
 }
 
 /// Orquesta el aprovisionamiento (efectos: genera la llave y lanza en una
@@ -184,14 +160,29 @@ pub fn provision(
         }
     }
 
-    // 2) Encadenar copia de la pública + conexión por llave en una sola terminal.
-    let copy_id = copy_id_inner_command(
-        &pub_key_str,
+    // 2) Instalar la pública + abrir la sesión por llave, en una sola terminal.
+    //
+    // Arranque: si la credencial ya trae una llave **que existe en este equipo**,
+    // se usa para autenticar y el usuario no teclea nada. Si no la hay (o el
+    // archivo no está), se omite y `ssh` pide la contraseña, como siempre. Que la
+    // llave del usuario sirva de arranque es lo que permite no llevársela nunca
+    // al vault: sólo viaja la que genera Karto.
+    let bootstrap = req
+        .key_path
+        .as_deref()
+        .filter(|k| !k.is_empty() && Path::new(k).exists() && *k != key_path_str);
+
+    let public_key = std::fs::read_to_string(&pub_key_str)
+        .map_err(|e| AppError::Other(format!("no se pudo leer la llave pública generada: {e}")))?;
+    let install = crate::usecases::key_install::install_command(
+        &public_key,
         req.user.as_deref(),
         &req.host,
         req.port,
         &req.ssh_options,
-    );
+        bootstrap,
+    )?;
+
     let key_req = ConnectionRequest {
         key_path: Some(key_path_str.clone()),
         ..req.clone()
@@ -201,9 +192,10 @@ pub fn provision(
     let marker = marker_path(credential_id);
     let _ = std::fs::remove_file(&marker);
     let spec = launch_in_terminal(&onboarding_script(
-        &copy_id,
+        &install,
         &ssh_key,
         &marker.to_string_lossy(),
+        Os::current(),
     ))?;
     std::process::Command::new(&spec.program)
         .args(&spec.args)
@@ -275,51 +267,29 @@ mod tests {
         );
     }
 
+    // El marcador va ENTRE la instalación y la sesión interactiva: así aparece
+    // en cuanto la copia termina, sin esperar a que se cierre la terminal.
     #[test]
-    fn copy_id_includes_key_port_options_and_destination() {
-        let cmd = copy_id_inner_command(
-            "/k.pub",
-            Some("root"),
-            "10.0.0.5",
-            Some(2222),
-            &["ProxyJump bastion".into()],
-        );
+    fn onboarding_script_chains_install_marker_then_connection_on_linux() {
+        let install = vec!["ssh".to_string(), "root@h".into(), "umask 077; ...".into()];
+        let ssh = vec!["ssh".to_string(), "-i".into(), "/k".into(), "root@h".into()];
         assert_eq!(
-            cmd,
-            vec![
-                "ssh-copy-id",
-                "-i",
-                "/k.pub",
-                "-p",
-                "2222",
-                "-o",
-                "ProxyJump bastion",
-                "root@10.0.0.5",
-            ]
+            onboarding_script(&install, &ssh, "/tmp/m.ok", Os::Linux),
+            "ssh root@h 'umask 077; ...' && touch /tmp/m.ok && ssh -i /k root@h"
         );
     }
 
+    // Windows PowerShell 5.1 no tiene `&&` (llegó en PowerShell 7): la condición
+    // se escribe con $LASTEXITCODE o el encadenado no se ejecuta.
     #[test]
-    fn copy_id_without_user_or_port_uses_bare_host() {
-        let cmd = copy_id_inner_command("/k.pub", None, "srv.local", None, &[]);
-        assert_eq!(cmd, vec!["ssh-copy-id", "-i", "/k.pub", "srv.local"]);
-    }
-
-    #[test]
-    fn onboarding_script_chains_copy_then_key_connection() {
-        let copy = copy_id_inner_command("/k.pub", Some("root"), "h", Some(22), &[]);
-        let ssh = vec![
-            "ssh".to_string(),
-            "-i".into(),
-            "/k".into(),
-            "root@h".into(),
-        ];
-        // El marcador va ENTRE la copia y la sesión interactiva: así aparece en
-        // cuanto la copia termina, sin esperar a que se cierre la terminal.
-        assert_eq!(
-            onboarding_script(&copy, &ssh, "/tmp/karto-provision-c1.ok"),
-            "ssh-copy-id -i /k.pub -p 22 root@h && touch /tmp/karto-provision-c1.ok && ssh -i /k root@h"
-        );
+    fn onboarding_script_uses_lastexitcode_on_windows() {
+        let install = vec!["ssh".to_string(), "root@h".into()];
+        let ssh = vec!["ssh".to_string(), "-i".into(), "C:/k".into(), "root@h".into()];
+        let s = onboarding_script(&install, &ssh, "C:/tmp/m.ok", Os::Windows);
+        assert!(!s.contains("&&"), "PowerShell 5.1 no lo soporta: {s}");
+        assert!(s.starts_with("& 'ssh' 'root@h'; if ($LASTEXITCODE -eq 0) {"), "{s}");
+        assert!(s.contains("New-Item -ItemType File -Force -Path 'C:/tmp/m.ok'"));
+        assert!(s.contains("& 'ssh' '-i' 'C:/k' 'root@h'"));
     }
 
     // --- Atomicidad (Fase 3b.0) ---

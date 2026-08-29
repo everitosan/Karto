@@ -1,10 +1,8 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
-
   "language_name": "Español",
   "settings_language": "Idioma",
   "settings_language_hint": "El idioma de la interfaz. Por defecto sigue al del sistema operativo.",
-
   "common_back": "Volver",
   "common_cancel": "Cancelar",
   "common_save": "Guardar",
@@ -14,18 +12,14 @@
   "common_close": "Cerrar",
   "common_new": "Nuevo",
   "common_search": "Buscar",
-
   "auth_password_master": "Contraseña maestra",
-
   "dialog_vault_filter": "Vault de Karto",
   "dialog_create_vault": "Crear vault",
   "dialog_save_backup": "Guardar copia de respaldo cifrada",
   "dialog_export_subset": "Exportar selección a un vault nuevo",
   "dialog_open_vault": "Abrir vault",
   "dialog_pick_ssh_key": "Elegir llave SSH",
-
   "password_toggle": "Mostrar/ocultar",
-
   "welcome_tagline": "Todo tu universo de infraestructura en un solo mapa cifrado.",
   "welcome_forget_recent": "Quitar de recientes",
   "welcome_open_existing": "Abrir vault existente",
@@ -35,17 +29,14 @@
   "welcome_creating": "Creando…",
   "welcome_create_submit": "Crear y cifrar",
   "welcome_error_password": "La contraseña debe tener al menos 8 caracteres y coincidir.",
-
   "unlock_title": "Desbloquear",
   "unlock_wrong_password": "Contraseña incorrecta.",
   "unlock_unlocking": "Desbloqueando…",
   "unlock_submit": "Desbloquear",
-
   "nav_sections": "Secciones",
   "nav_diagrams": "Diagramas",
   "nav_scripts": "Scripts",
   "nav_config": "Configuración",
-
   "topbar_sidebar_pin": "Fijar barra lateral",
   "topbar_sidebar_collapse": "Colapsar barra lateral",
   "topbar_close_vault": "Cerrar vault (volver a la selección)",
@@ -54,13 +45,10 @@
   "window_minimize": "Minimizar",
   "window_maximize": "Maximizar",
   "window_restore": "Restaurar",
-
   "contextbar_active": "Contexto de red activo",
   "contextbar_manage": "Gestionar contextos",
-
   "common_collapse": "Colapsar",
   "common_expand": "Expandir",
-
   "sidebar_new_folder": "Nueva carpeta",
   "sidebar_new_map": "Nuevo diagrama",
   "sidebar_import_ssh": "Importar desde ~/.ssh/config",
@@ -69,30 +57,25 @@
   "sidebar_empty": "Sin diagramas todavía. Crea una carpeta o un diagrama con los botones de arriba.",
   "sidebar_delete_folder_confirm": "¿Eliminar la carpeta «{name}» y todo su contenido?",
   "sidebar_delete_map_confirm": "¿Eliminar el diagrama «{name}»?",
-
   "common_password": "Contraseña",
   "common_copy": "Copiar",
   "common_edit": "Editar",
   "common_clear": "Limpiar",
   "common_saving": "Guardando…",
   "common_accept": "Aceptar",
-
   "palette_title": "Nodos",
   "palette_search": "Buscar tipo…",
   "palette_no_matches": "Sin coincidencias para «{query}».",
   "palette_drag_hint": "Arrastra un tipo al lienzo.",
-
   "search_placeholder": "Buscar por IP, host o etiqueta…",
   "search_clear": "Limpiar búsqueda",
   "search_no_results": "Sin resultados",
-
   "menu_connect": "Conectar",
   "menu_connect_error": "No se pudo conectar",
   "menu_no_credentials": "Sin credenciales",
   "menu_check_status": "Comprobar estado",
   "menu_delete_node": "Eliminar nodo",
   "menu_default_suffix": "(por defecto)",
-
   "props_label": "Etiqueta",
   "props_connect_default_title": "Conectar con la credencial predeterminada",
   "props_open_url_title": "Abrir {url}",
@@ -119,7 +102,6 @@
   "props_notes_view": "Vista",
   "props_notes_placeholder": "Markdown: **negrita**, listas, [enlaces](url)…",
   "props_notes_empty": "Sin notas todavía.",
-
   "cred_add_title": "Agregar credencial",
   "cred_edit_title": "Editar credencial",
   "cred_type": "Tipo",
@@ -134,7 +116,6 @@
   "cred_ssh_options_placeholder": "Una por línea, p. ej.:\nServerAliveInterval=60\nConnectTimeout=10\nProxyJump bastion",
   "cred_ssh_options_hint": "Cada línea se pasa como <code>-o &lt;opción&gt;</code> a ssh.",
   "cred_use_default": "Usar como predeterminada",
-
   "keyob_title": "Conexión SSH por contraseña",
   "keyob_intro_before": "Esta credencial{host} se conecta por contraseña. Puedes cambiar a ",
   "keyob_intro_strong": "acceso por llave",
@@ -151,13 +132,11 @@
   "keyob_processing": "Procesando…",
   "keyob_setup_connect": "Configurar y conectar",
   "keyob_connect_password": "Conectar con contraseña",
-
   "trust_title": "Plantilla de conexión personalizada",
   "trust_intro": "Este vault trae una <strong>plantilla de conexión</strong> que ejecutará el siguiente comando en tu equipo. Revísalo: si no reconoces este vault o el comando, <strong>cancela</strong>.",
   "trust_note": "Si confías en este vault, se recordará tu decisión en este equipo y no se volverá a preguntar.",
   "trust_connecting": "Conectando…",
   "trust_confirm": "Confiar y ejecutar",
-
   "export_title": "Exportar selección",
   "export_lead_one": "Se exportará <strong>{count}</strong> nodo y sus conexiones a un <code>.karto</code> nuevo, cifrado con una contraseña propia (para compartir sin revelar tu contraseña maestra).",
   "export_lead_other": "Se exportarán <strong>{count}</strong> nodos y las conexiones entre ellos a un <code>.karto</code> nuevo, cifrado con una contraseña propia (para compartir sin revelar tu contraseña maestra).",
@@ -171,7 +150,6 @@
   "export_error_mismatch": "La confirmación no coincide.",
   "export_exporting": "Exportando…",
   "export_submit": "Exportar…",
-
   "flow_edge_default": "Curva",
   "flow_edge_smoothstep": "Escalonada suave",
   "flow_edge_step": "Escalonada",
@@ -190,11 +168,9 @@
   "flow_export_selection": "Exportar selección",
   "flow_export_png": "PNG (imagen)",
   "flow_export_svg": "SVG (vectorial)",
-
   "common_name": "Nombre",
   "common_add": "Añadir",
   "common_or": "o",
-
   "settings_tab_general": "General",
   "settings_tab_about": "Acerca de",
   "settings_tab_security": "Seguridad",
@@ -202,7 +178,6 @@
   "settings_tab_templates": "Plantillas",
   "settings_tab_shortcuts": "Atajos",
   "settings_tab_diagnostics": "Diagnóstico",
-
   "about_report_issue": "Reportar un problema",
   "about_open_error": "No se pudo abrir el enlace.",
   "about_made_by": "Hecho por",
@@ -212,7 +187,6 @@
   "about_opensource_after": ").",
   "about_support_hint": "Si te resulta útil, puedes invitarme un café para apoyar su desarrollo.",
   "about_links": "Enlaces",
-
   "sec_pw_empty": "La nueva contraseña no puede estar vacía.",
   "sec_pw_updated": "Contraseña maestra actualizada.",
   "sec_pw_wrong": "La contraseña actual es incorrecta.",
@@ -225,14 +199,12 @@
   "sec_pw_confirm_new": "Confirmar nueva contraseña",
   "sec_changing": "Cambiando…",
   "sec_change_pw": "Cambiar contraseña",
-
   "backup_ok": "Copia guardada correctamente.",
   "backup_error": "No se pudo escribir la copia (¿el archivo ya existe?).",
   "backup_title": "Copia de respaldo cifrada",
   "backup_hint_before": "Genera un archivo ",
   "backup_hint_after": " cifrado con la contraseña actual. Guárdalo en un lugar seguro: si olvidas la contraseña, los datos son irrecuperables.",
   "backup_export_btn": "Exportar copia cifrada…",
-
   "tpl_hint_placeholders": "Comando interno con placeholders",
   "tpl_hint_rest": "La biblioteca es de esta máquina; al <strong>ligar</strong> una plantilla se copia al vault y viaja con el <code>.karto</code> (SSH en Linux por ahora).",
   "tpl_linked_tag": "ligada al vault",
@@ -241,7 +213,6 @@
   "tpl_linked_heading": "Ligadas en este vault",
   "tpl_unlink": "Desligar",
   "tpl_command_placeholder": "Comando con placeholders",
-
   "diag_read_error": "No se pudo leer la configuración del log.",
   "diag_level_updated": "Nivel del log actualizado.",
   "diag_level_error": "No se pudo cambiar el nivel del log.",
@@ -257,13 +228,11 @@
   "diag_level_info_hint": "Información de acciones comunes.",
   "diag_level_warning_hint": "Avisos y errores (por defecto).",
   "diag_level_error_hint": "Solo errores.",
-
   "shortcut_section_diagram": "Diagrama",
   "shortcut_key_delete": "Supr",
   "shortcut_key_backspace": "Retroceso",
   "shortcut_delete_action": "Eliminar el nodo o la conexión seleccionada",
   "shortcut_esc_action": "Cerrar el menú contextual",
-
   "scripts_diagram": "Diagrama",
   "scripts_select_diagram": "— selecciona un diagrama —",
   "scripts_run_mode": "Modo de ejecución",
@@ -299,14 +268,12 @@
   "scripts_confirm_del_folder_after": "? Sus scripts no se borran: quedarán sin carpeta.",
   "scripts_move_to": "Mover a",
   "scripts_no_folder": "Sin carpeta",
-
   "ctx_title": "Contextos de red",
   "ctx_hint": "Un contexto es un punto de vista de red (oficina, VPN, casa…). Cada nodo guarda su dirección en cada contexto; al cambiar el contexto activo, todo el diagrama usa la dirección correcta sin editar nodo por nodo.",
   "ctx_min_one": "Debe existir al menos un contexto.",
   "ctx_delete_confirm": "¿Eliminar el contexto «{name}»? Se perderán sus direcciones en los nodos.",
   "ctx_delete_title": "Eliminar contexto",
   "ctx_new_placeholder": "Nuevo contexto (p. ej. VPN)",
-
   "ssh_import_title": "Importar desde configuración SSH",
   "ssh_browse_title": "Elegir archivo de configuración SSH",
   "ssh_drop_aria": "Soltar un archivo de configuración SSH",
@@ -330,7 +297,6 @@
   "ssh_import_action": "Importar",
   "ssh_hosts_map_default": "Hosts SSH",
   "ssh_hosts_map_named": "Hosts {name}",
-
   "category_network": "Red",
   "category_security": "Seguridad",
   "category_identity": "Identidad",
@@ -343,7 +309,6 @@
   "category_external": "Externo",
   "category_client": "Cliente / actor",
   "category_grouping": "Agrupadores",
-
   "nodeKind_internet": "Internet",
   "nodeKind_router": "Router",
   "nodeKind_switch": "Switch",
@@ -388,7 +353,6 @@
   "nodeKind_workstation": "Workstation",
   "nodeKind_mobile": "Móvil",
   "nodeKind_zone": "Zona / área",
-
   "cp_notas": "Notas",
   "cp_asn_rango": "ASN / rango",
   "cp_marca_modelo": "Marca / modelo",
@@ -524,5 +488,12 @@
   "co_azul": "Azul",
   "co_ambar": "Ámbar",
   "co_rosa": "Rosa",
-  "co_violeta": "Violeta"
+  "co_violeta": "Violeta",
+  "keyob_title_localkey": "La llave no viaja con el diagrama",
+  "keyob_intro_localkey_before": "Esta credencial{host} usa una llave que ",
+  "keyob_intro_localkey_strong": "sólo existe en este equipo",
+  "keyob_intro_localkey_after": ". Aquí conecta bien, pero al abrir el .karto en otro sitio la ruta no apunta a nada. Karto puede crear una llave propia usando la tuya para instalarla, sin que teclees nada: así tu llave personal nunca entra en el vault.",
+  "keyob_register_title_localkey": "Crear una llave de Karto",
+  "keyob_register_hint_localkey": "Se instala en el servidor usando tu llave actual como acceso. La tuya no se toca.",
+  "keyob_connect_asis": "Conectar sin cambios"
 }

@@ -34,16 +34,12 @@ export function keyOnboardingReason(
 }
 
 /**
- * ¿Se ofrece el modal de onboarding al conectar?
- *
- * De momento **sólo** para el caso `password`, que es el flujo que funciona hoy.
- * El caso `local-key` ya se detecta (ver `keyOnboardingReason`) pero no se ofrece
- * todavía: sustituir la llave del usuario por una de Karto necesita el arranque
- * con la llave existente, que aún no está. Ofrecerlo antes sería prometer un
- * flujo a medias.
+ * ¿Se ofrece el modal de onboarding al conectar? Siempre que el vault no pueda
+ * llevarse la credencial, sea porque no hay llave (`password`) o porque la que
+ * hay sólo existe en este equipo (`local-key`).
  */
 export function needsKeyOnboarding(cred: Credential | undefined): boolean {
-  return keyOnboardingReason(cred) === "password";
+  return keyOnboardingReason(cred) !== null;
 }
 
 /** Opciones elegidas en el modal de onboarding de llave. */

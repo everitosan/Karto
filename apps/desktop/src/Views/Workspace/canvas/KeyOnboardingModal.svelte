@@ -1,7 +1,11 @@
 <script lang="ts">
-  // Modal que aparece al conectar por contraseña a un nodo SSH: ofrece cambiar a
-  // acceso por llave (más seguro). Los dos últimos checkboxes dependen del
-  // primero. Lee/actualiza el estado compartido en `connectFlow.svelte.ts`.
+  // Modal que aparece al conectar cuando el vault no puede llevarse la
+  // credencial. Dos casos, con explicación distinta:
+  //   - `password`: SSH sin llave -> ofrecer acceso por llave (más seguro).
+  //   - `local-key`: ya hay llave, pero sólo existe en este equipo -> ofrecer
+  //     una propia de Karto, instalada usando la del usuario, que así nunca
+  //     entra en el vault.
+  // Los dos últimos checkboxes dependen del primero.
   import { Modal, Button, Checkbox } from "@karto/ui";
   import { onboarding, confirmOnboarding, cancelOnboarding } from "./connectFlow.svelte";
   import { m } from "$paraglide/messages.js";
@@ -17,12 +21,16 @@
       lastPending = onboarding.pending;
       registerKey = true;
       setDefaultKey = true;
-      storeInVault = false;
+      // En `local-key` guardar la llave en el vault ES el objetivo (que el
+      // .karto sea portable), así que viene marcado.
+      storeInVault = onboarding.pending.reason === "local-key";
     }
   });
 
   const open = $derived(onboarding.pending !== null);
   const host = $derived(onboarding.pending?.credential.username ?? "");
+  const localKey = $derived(onboarding.pending?.reason === "local-key");
+  const hostSuffix = $derived(host ? ` (${host})` : "");
 
   async function proceed() {
     await confirmOnboarding({
@@ -33,16 +41,28 @@
   }
 </script>
 
-<Modal {open} title={m.keyob_title()} width="30rem" onClose={cancelOnboarding}>
+<Modal
+  {open}
+  title={localKey ? m.keyob_title_localkey() : m.keyob_title()}
+  width="30rem"
+  onClose={cancelOnboarding}
+>
   <p class="intro">
-    {m.keyob_intro_before({ host: host ? ` (${host})` : "" })}<strong>{m.keyob_intro_strong()}</strong>{m.keyob_intro_after()}
+    {#if localKey}
+      {m.keyob_intro_localkey_before({ host: hostSuffix })}<strong
+        >{m.keyob_intro_localkey_strong()}</strong
+      >{m.keyob_intro_localkey_after()}
+    {:else}
+      {m.keyob_intro_before({ host: hostSuffix })}<strong>{m.keyob_intro_strong()}</strong>{m.keyob_intro_after()}
+    {/if}
   </p>
 
   <div class="check">
     <Checkbox bind:checked={registerKey}>
       <span class="label">
-        <strong>{m.keyob_register_title()}</strong>{m.keyob_register_rest()}
-        <small>{m.keyob_register_hint()}</small>
+        <strong>{localKey ? m.keyob_register_title_localkey() : m.keyob_register_title()}</strong
+        >{localKey ? "" : m.keyob_register_rest()}
+        <small>{localKey ? m.keyob_register_hint_localkey() : m.keyob_register_hint()}</small>
       </span>
     </Checkbox>
   </div>
@@ -68,7 +88,13 @@
   {#snippet footer()}
     <Button variant="ghost" onclick={cancelOnboarding} disabled={onboarding.busy}>{m.common_cancel()}</Button>
     <Button onclick={proceed} disabled={onboarding.busy}>
-      {onboarding.busy ? m.keyob_processing() : registerKey ? m.keyob_setup_connect() : m.keyob_connect_password()}
+      {onboarding.busy
+        ? m.keyob_processing()
+        : registerKey
+          ? m.keyob_setup_connect()
+          : localKey
+            ? m.keyob_connect_asis()
+            : m.keyob_connect_password()}
     </Button>
   {/snippet}
 </Modal>
