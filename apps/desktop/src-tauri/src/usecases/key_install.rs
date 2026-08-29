@@ -12,19 +12,32 @@
 
 use crate::error::{AppError, AppResult};
 
-/// Script que corre en el **servidor**. Replica lo que hace `ssh-copy-id`:
+/// Script que corre en el **servidor**. Replica lo que hacía `ssh-copy-id`, que
+/// se dejó de usar porque es un script de shell ausente en el OpenSSH de Windows
+/// y porque su `-i` mezcla "llave a instalar" con "llave para autenticar", lo que
+/// impedía el arranque con la llave del usuario.
 ///
-/// - `umask 077` para que lo que se cree nazca privado (sshd rechaza un
-///   `authorized_keys` accesible por otros, igual que el cliente rechaza una
-///   llave privada abierta).
-/// - `mkdir -p ~/.ssh` y `chmod 700`, por si es el primer acceso por llave.
-/// - `grep -qxF` (cadena fija, línea completa) para **no duplicar** la entrada si
-///   ya estaba: aprovisionar dos veces no debe dejar el archivo creciendo.
+/// Sustituirlo obliga a replicar sus casos límite, que no son cosméticos:
 ///
-/// Falla si la pública trae una comilla simple: se incrusta entre comillas
-/// simples en el script remoto y no hay forma segura de escaparla ahí. Las llaves
-/// que genera Karto (`-C karto:<node_id>`) nunca la traen, así que esto es una
-/// red de seguridad frente a una pública de origen inesperado.
+/// - **Salto de línea final.** Si `authorized_keys` no termina en salto, un
+///   `printf >>` pega la llave nueva al final de la anterior: corrompe la que
+///   estaba *y* la nueva no funciona. Se añade el salto antes si falta.
+/// - **Permisos de un archivo preexistente.** `umask 077` sólo cubre lo que se
+///   crea ahora; `sshd` **ignora** un `authorized_keys` accesible por otros, así
+///   que se fuerza 600 aunque ya existiera.
+/// - **SELinux.** En RHEL/Fedora un `~/.ssh` recién creado nace con un contexto
+///   que `sshd` rechaza; `restorecon` lo corrige. Es `|| true` porque en el resto
+///   de sistemas el binario no existe.
+/// - **Estado de salida.** Los pasos críticos van encadenados con `&&` para que
+///   un fallo (un `$HOME` de sólo lectura, cuota llena) se propague: de él depende
+///   que se escriba el marcador de éxito y que Karto toque la credencial.
+/// - **No duplicar** la entrada al reaprovisionar (`grep -qxF`, cadena fija y
+///   línea completa).
+///
+/// Falla si la pública trae una comilla simple o un salto: se incrusta entre
+/// comillas simples en el script remoto y no hay forma segura de escaparla ahí.
+/// Las llaves que genera Karto nunca los traen; es red de seguridad frente a una
+/// pública de origen inesperado.
 pub fn remote_script(public_key: &str) -> AppResult<String> {
     let key = public_key.trim();
     if key.is_empty() {
@@ -35,16 +48,19 @@ pub fn remote_script(public_key: &str) -> AppResult<String> {
             "la llave pública contiene caracteres no admitidos para instalarla".into(),
         ));
     }
+    let ak = "~/.ssh/authorized_keys";
     Ok([
-        "umask 077",
-        "mkdir -p ~/.ssh",
-        "chmod 700 ~/.ssh",
-        "touch ~/.ssh/authorized_keys",
-        &format!(
-            "grep -qxF '{key}' ~/.ssh/authorized_keys || printf '%s\\n' '{key}' >> ~/.ssh/authorized_keys"
-        ),
+        "umask 077".to_string(),
+        "mkdir -p ~/.ssh".to_string(),
+        "chmod 700 ~/.ssh".to_string(),
+        format!("touch {ak}"),
+        format!("chmod 600 {ak}"),
+        // `$(tail -c1)` se come el salto final, así que sale vacío si lo hay.
+        format!("{{ [ ! -s {ak} ] || [ -z \"$(tail -c1 {ak})\" ] || echo >> {ak}; }}"),
+        format!("{{ grep -qxF '{key}' {ak} || printf '%s\\n' '{key}' >> {ak}; }}"),
+        format!("{{ restorecon -F ~/.ssh {ak} 2>/dev/null || true; }}"),
     ]
-    .join("; "))
+    .join(" && "))
 }
 
 /// argv de `ssh` que instala `public_key` en el servidor.
@@ -105,6 +121,41 @@ mod tests {
         // Sin el grep, reaprovisionar dejaría la entrada duplicada.
         assert!(s.contains(&format!("grep -qxF '{KEY}' ~/.ssh/authorized_keys ||")));
         assert!(s.contains(">> ~/.ssh/authorized_keys"));
+    }
+
+    // El fallo que tenía la primera versión y que `ssh-copy-id` sí cubría: sin
+    // salto de línea final, `printf >>` pega la llave nueva al final de la
+    // anterior, corrompiendo las dos.
+    #[test]
+    fn remote_script_adds_a_newline_before_appending() {
+        let s = remote_script(KEY).unwrap();
+        assert!(s.contains("tail -c1 ~/.ssh/authorized_keys"), "{s}");
+        assert!(s.contains("echo >> ~/.ssh/authorized_keys"), "{s}");
+    }
+
+    // sshd ignora un authorized_keys accesible por otros; umask sólo cubre lo que
+    // se crea ahora, así que hay que forzarlo por si el archivo ya existía.
+    #[test]
+    fn remote_script_fixes_permissions_of_a_preexisting_file() {
+        assert!(remote_script(KEY).unwrap().contains("chmod 600 ~/.ssh/authorized_keys"));
+    }
+
+    // En RHEL/Fedora un ~/.ssh recién creado nace con un contexto que sshd
+    // rechaza. `|| true` porque en el resto de sistemas el binario no existe.
+    #[test]
+    fn remote_script_restores_selinux_context_best_effort() {
+        let s = remote_script(KEY).unwrap();
+        assert!(s.contains("restorecon -F ~/.ssh"), "{s}");
+        assert!(s.contains("|| true"), "{s}");
+    }
+
+    // Los pasos críticos van con `&&`: de su estado de salida depende que se
+    // escriba el marcador y que Karto toque la credencial.
+    #[test]
+    fn remote_script_propagates_failure() {
+        let s = remote_script(KEY).unwrap();
+        assert!(s.contains("mkdir -p ~/.ssh && "), "{s}");
+        assert!(!s.contains("; mkdir"), "un `;` se tragaría el fallo: {s}");
     }
 
     #[test]

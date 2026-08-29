@@ -151,6 +151,31 @@ que el vault es portable. Una llave del usuario sirve de *arranque*, no de carga
       La pública se incrusta entre comillas simples en el script remoto, así que
       se rechaza una que traiga comilla o salto de línea. Las de Karto nunca las
       traen; es red de seguridad ante una pública de origen inesperado.
+
+      **Sustituirlo obliga a replicar sus casos límite**, y la primera versión se
+      dejó varios (encontrados al revisar si no habría sido mejor dejar
+      `ssh-copy-id` en Linux con compilación condicional):
+
+      - *Salto de línea final.* Si `authorized_keys` no termina en salto, un
+        `printf >>` pega la llave nueva al final de la anterior y **corrompe las
+        dos**. Reproducido y corregido.
+      - *Permisos de un archivo preexistente.* `umask 077` sólo cubre lo que se
+        crea ahora; `sshd` ignora un `authorized_keys` accesible por otros.
+      - *SELinux.* En RHEL/Fedora un `~/.ssh` recién creado nace con un contexto
+        que `sshd` rechaza; `restorecon` (best-effort) lo corrige.
+      - *Estado de salida.* Los pasos van con `&&`, no `;`: de su código depende
+        que se escriba el marcador y que Karto toque la credencial.
+
+      Se descartó la vía de mantener `ssh-copy-id` sólo en Linux: su `-i` mezcla
+      "llave a instalar" con "llave para autenticar", así que el **arranque con la
+      llave del usuario** —lo nuevo de la Fase 3b— quedaría sin soporte ahí o con
+      una combinación de flags sin verificar. Bifurcar dejaría la funcionalidad
+      nueva peor en Linux que en Windows, y macOS pediría una tercera decisión.
+
+      Verificado ejecutando el script generado con `sh` real: sin salto final ya
+      no corrompe, tres pasadas no duplican, la primera crea `~/.ssh`, y un
+      `$HOME` inaccesible devuelve ≠ 0. Los `chmod` no se pudieron comprobar
+      (el banco de pruebas es un sistema de archivos Windows).
 - [x] **Bootstrap por llave existente**: `ssh -i <la del usuario>
       -o IdentitiesOnly=yes` para autenticarse e instalar la nueva, y el usuario
       no teclea nada. `IdentitiesOnly` es necesario: sin él `ssh` ofrece antes las
