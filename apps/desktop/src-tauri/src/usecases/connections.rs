@@ -485,6 +485,7 @@ pub(crate) fn node_url(conn: &Connection, node_id: &str) -> AppResult<Option<Str
 }
 
 struct CredRow {
+    id: String,
     kind: String,
     username: Option<String>,
     port: Option<u16>,
@@ -504,7 +505,7 @@ fn load_credential(
     let row = match credential_id {
         Some(id) => conn
             .query_row(
-                "SELECT kind, username, port, key_path, options, private_key FROM credentials \
+                "SELECT id, kind, username, port, key_path, options, private_key FROM credentials \
                  WHERE id = ?1 AND node_id = ?2",
                 params![id, node_id],
                 map_cred_row,
@@ -512,7 +513,7 @@ fn load_credential(
             .optional()?,
         None => conn
             .query_row(
-                "SELECT kind, username, port, key_path, options, private_key FROM credentials \
+                "SELECT id, kind, username, port, key_path, options, private_key FROM credentials \
                  WHERE node_id = ?1 ORDER BY is_default DESC, kind LIMIT 1",
                 params![node_id],
                 map_cred_row,
@@ -524,12 +525,13 @@ fn load_credential(
 
 fn map_cred_row(r: &rusqlite::Row) -> rusqlite::Result<CredRow> {
     Ok(CredRow {
-        kind: r.get(0)?,
-        username: r.get(1)?,
-        port: r.get::<_, Option<i64>>(2)?.map(|p| p as u16),
-        key_path: r.get(3)?,
-        options: r.get(4)?,
-        private_key: r.get(5)?,
+        id: r.get(0)?,
+        kind: r.get(1)?,
+        username: r.get(2)?,
+        port: r.get::<_, Option<i64>>(3)?.map(|p| p as u16),
+        key_path: r.get(4)?,
+        options: r.get(5)?,
+        private_key: r.get(6)?,
     })
 }
 
@@ -584,6 +586,36 @@ pub fn materialize_key(key_path: &str, private_key: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// ¿La ruta de llave guardada sirve **tal cual en este SO**?
+///
+/// Un vault creado en Linux trae rutas POSIX. En Windows `/home/x/.ssh/id` **no
+/// es absoluta**: se resuelve contra la unidad actual, así que materializar ahí
+/// deja basura en la raíz del disco y `ssh -i` no encuentra la llave. El caso
+/// simétrico —una ruta `C:\\Users\\...` abierta en Linux— falla igual.
+/// `is_absolute()` es justo la pregunta correcta, y la responde cada plataforma.
+pub fn is_usable_key_path(path: &str) -> bool {
+    !path.is_empty() && Path::new(path).is_absolute()
+}
+
+/// Ruta **de este equipo** donde vive la llave de una credencial.
+///
+/// Si la guardada sirve aquí, se respeta. Si viene de otro SO se remapea al
+/// directorio que Karto gestiona (`~/.ssh/karto/<credencial>_ed25519`): es lo que
+/// hace que un `.karto` exportado en Linux se pueda abrir en Windows y conectar,
+/// que es el objetivo entero de guardar el material dentro del vault.
+pub fn local_key_path(stored: &str, credential_id: &str) -> AppResult<String> {
+    if is_usable_key_path(stored) {
+        return Ok(stored.to_string());
+    }
+    let dir = crate::usecases::ssh_provision::karto_keys_dir().ok_or_else(|| {
+        AppError::Other("no se encontró el directorio del usuario para la llave".into())
+    })?;
+    Ok(dir
+        .join(format!("{credential_id}_ed25519"))
+        .to_string_lossy()
+        .to_string())
+}
+
 /// Construye la petición de conexión leyendo el nodo y la credencial del vault.
 pub fn resolve(
     conn: &Connection,
@@ -616,9 +648,16 @@ pub fn resolve(
                         .into(),
                 )
             })?;
+            // La ruta guardada puede venir de otro SO (vault exportado en Linux y
+            // abierto en Windows): se traduce a una utilizable aquí antes de
+            // materializar y antes de pasársela a `ssh -i`.
+            let key_path = match &cred.key_path {
+                Some(kp) if !kp.is_empty() => Some(local_key_path(kp, &cred.id)?),
+                _ => None,
+            };
             // Si la credencial trae la llave guardada en el vault y su archivo no
             // existe en disco (p. ej. vault movido a otro equipo), se materializa.
-            if let (Some(kp), Some(pk)) = (&cred.key_path, &cred.private_key) {
+            if let (Some(kp), Some(pk)) = (&key_path, &cred.private_key) {
                 materialize_key(kp, pk)?;
             }
             Ok(ConnectionRequest {
@@ -626,7 +665,7 @@ pub fn resolve(
                 user: cred.username,
                 host,
                 port: cred.port,
-                key_path: cred.key_path,
+                key_path,
                 url: None,
                 ssh_options: parse_ssh_options(cred.options.as_deref()),
             })
@@ -1620,5 +1659,91 @@ mod windows_key_perms {
         assert!(ok_gestionada, "ssh rechazó la llave materializada: {detalle}");
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // --- Portabilidad de rutas entre SO ---
+
+    // El caso real: un .karto exportado en Linux y abierto en Windows. La ruta
+    // POSIX no es absoluta allí, así que materializar tal cual dejaba basura en
+    // la raíz del disco (C:\home\...) y la conexión no encontraba la llave.
+    #[test]
+    fn foreign_key_paths_are_not_usable_here() {
+        if cfg!(windows) {
+            assert!(!is_usable_key_path("/home/eve/.ssh/karto/c1_ed25519"));
+            assert!(is_usable_key_path("C:/Users/eve/.ssh/id_ed25519"));
+        } else {
+            assert!(is_usable_key_path("/home/eve/.ssh/karto/c1_ed25519"));
+            assert!(!is_usable_key_path("C:/Users/eve/.ssh/id_ed25519"));
+        }
+        assert!(!is_usable_key_path(""));
+    }
+
+    #[test]
+    fn local_key_path_keeps_a_native_path_and_remaps_a_foreign_one() {
+        let native = if cfg!(windows) { "C:/keys/id" } else { "/keys/id" };
+        assert_eq!(local_key_path(native, "c1").unwrap(), native);
+
+        let foreign = if cfg!(windows) { "/home/eve/.ssh/id" } else { "C:/Users/eve/id" };
+        let mapped = local_key_path(foreign, "c1").unwrap();
+        assert_ne!(mapped, foreign);
+        assert!(mapped.ends_with("c1_ed25519"), "{mapped}");
+        // Y la remapeada sí sirve aquí: es el punto de todo el ejercicio.
+        assert!(is_usable_key_path(&mapped), "{mapped}");
+    }
+}
+
+/// Reproduce el caso de un `.karto` **exportado en Linux y abierto en Windows**:
+/// la credencial trae una ruta POSIX y el material dentro del vault. Antes esto
+/// dejaba directorios sueltos en la raíz del disco y fallaba al aplicar la ACL.
+///
+/// `cargo test --lib windows_foreign_vault -- --ignored --nocapture`
+#[cfg(all(test, windows))]
+mod windows_foreign_vault {
+    use super::*;
+
+    #[test]
+    #[ignore = "escribe en ~/.ssh/karto y necesita ssh-keygen"]
+    fn a_linux_vault_key_lands_locally_and_ssh_accepts_it() {
+        let kg = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap())
+            .join(r"System32\OpenSSH\ssh-keygen.exe");
+
+        // Material tal cual vendría dentro del vault.
+        let tmp = std::env::temp_dir().join(format!("karto-fv-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let seed = tmp.join("seed");
+        std::process::Command::new(&kg)
+            .args(["-t", "ed25519", "-N", "", "-C", "karto:n1", "-q", "-f"])
+            .arg(&seed)
+            .status()
+            .unwrap();
+        let material = std::fs::read_to_string(&seed).unwrap();
+
+        // Lo que guarda un vault hecho en Linux.
+        let stored = "/home/eve/.ssh/karto/cfv1_ed25519";
+        let local = local_key_path(stored, "cfv1").unwrap();
+        println!("guardada en el vault : {stored}");
+        println!("resuelta en Windows  : {local}");
+
+        let _ = std::fs::remove_file(&local);
+        materialize_key(&local, &material).expect("debe materializar sin error");
+
+        assert!(Path::new(&local).exists(), "la llave no se escribió");
+        assert!(!Path::new("C:/home").exists(), "no debe tocar la raíz del disco");
+
+        let out = std::process::Command::new(&kg)
+            .args(["-y", "-P", "", "-f"])
+            .arg(&local)
+            .output()
+            .unwrap();
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        println!("ssh acepta la llave  : {}", !combined.contains("UNPROTECTED"));
+        assert!(!combined.contains("UNPROTECTED"), "{combined}");
+
+        let _ = std::fs::remove_file(&local);
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

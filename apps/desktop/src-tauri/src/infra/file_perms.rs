@@ -142,6 +142,17 @@ mod windows_impl {
     }
 
     pub(super) fn restrict(path: &Path, kind: Kind) -> AppResult<()> {
+        // `icacls` lee un argumento que empieza por `/` como modificador suyo
+        // (`/reset`, `/grant`…), así que una ruta POSIX —la que trae un vault
+        // exportado desde Linux— le da error de sintaxis en vez de aplicarse.
+        // Exigir una ruta absoluta de este SO lo descarta y, de paso, evita
+        // operar sobre algo relativo al directorio de trabajo del proceso.
+        if !path.is_absolute() {
+            return Err(AppError::Other(format!(
+                "ruta no absoluta para este sistema: {}",
+                path.display()
+            )));
+        }
         let target = path.to_string_lossy().to_string();
         let account = current_account()?;
         // (OI)(CI) hace que un directorio propague su DACL a lo que cuelgue de él.
