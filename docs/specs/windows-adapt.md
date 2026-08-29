@@ -67,16 +67,36 @@ listar las terminales del SO real en vez de las de Linux siempre.
 **SSH ya conecta en Windows** — el 80% del valor de la app. Queda pendiente
 verificarlo con la app GUI empaquetada (`tauri:dev`), no solo desde los tests.
 
-## Fase 3 — Llaves SSH y permisos
+## Fase 3 — Llaves SSH y permisos (ACLs ✅ · aprovisionamiento pendiente)
 
-- [ ] **ACL de la llave privada en `materialize_key`** (`connections.rs:446`). Todos
-      los `set_permissions(0o600)` están bajo `#[cfg(unix)]`; en Windows la llave
-      hereda las ACL del directorio y **`ssh.exe` la rechaza** con *UNPROTECTED
-      PRIVATE KEY FILE*. Equivalente con `icacls`: quitar herencia, conceder solo al
-      usuario actual. Bug funcional **y** de seguridad.
-- [ ] **Verificación al reusar una llave existente**: hoy el chequeo de permisos
-      inseguros tampoco corre en Windows (mismo `#[cfg(unix)]`), así que se conecta
-      con una llave potencialmente legible por otros sin avisar.
+- [x] **ACL de la llave privada en `materialize_key`**. Confirmado contra
+      OpenSSH_for_Windows_9.5p2: una llave con `Everyone` en su DACL —aunque sea
+      por **herencia** del directorio— se rechaza con *UNPROTECTED PRIVATE KEY
+      FILE!*, así que era un bloqueante real de la conexión por llave.
+
+      La receta que circula, `icacls <f> /inheritance:r /grant:r usuario:F`, **no
+      sirve**: `/grant:r` sólo reemplaza las ACEs *de ese usuario*, y una ACE
+      explícita de `Everyone` sobrevive (medido: la llave sigue rechazada). Hace
+      falta `/reset` **antes**, y los grupos por **SID** y no por nombre, porque
+      los nombres están localizados (`BUILTIN\Administradores` en español).
+
+      Vive en `infra/file_perms.rs`, con una API por SO (`restrict_to_owner`,
+      `audit`) en vez de `#[cfg]` dispersos. `icacls.exe` se invoca por ruta
+      absoluta bajo `System32`, no vía `PATH`: uno interpuesto se ejecutaría con
+      nuestros privilegios sobre la ruta de una llave privada.
+- [~] **Verificación al reusar una llave existente**: en Unix sigue el chequeo de
+      modo (ahora vía `file_perms::audit`). En Windows leer la DACL exigiría una
+      dependencia nueva de la API del SO, así que `audit` devuelve `Unknown` y
+      Karto **no toca** el archivo —es del usuario, y apretarle los permisos en
+      silencio no desharía una exposición previa, sólo la ocultaría—; queda
+      registro en el log y `ssh` lo rechaza él mismo si de verdad está abierta.
+      Cerrarlo del todo pide leer la DACL (`windows-sys`) o parsear `icacls /save`,
+      que es SDDL y por tanto independiente del idioma.
+- [ ] **Ojo con el `PATH`**: si hay Git para Windows instalado, su `ssh`/`ssh-keygen`
+      son un build **MSYS** que *no* hace la comprobación de ACL y se comporta
+      distinto del OpenSSH del sistema. La app GUI hereda el `PATH` del sistema y
+      usa el de `System32\OpenSSH`, pero conviene tenerlo presente al diagnosticar
+      un "a mí me funciona" desde una terminal de Git Bash.
 - [ ] **Aprovisionamiento** (`ssh_provision.rs:94`): `launch_in_terminal` aborta con
       `_ =>`. Además `ssh-copy-id` **no viene** con el OpenSSH de Windows → usar
       `type key.pub | ssh host "cat >> ~/.ssh/authorized_keys"`.

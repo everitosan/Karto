@@ -141,7 +141,17 @@ pub fn provision(
     // 1) Generar la llave si aún no existe.
     if !key_path.exists() {
         if let Some(parent) = key_path.parent() {
+            // `~/.ssh/karto` es directorio nuestro: se crea restringido al usuario
+            // (0700 en Unix, DACL sin herencia en Windows) para que las llaves que
+            // cuelguen de él no nazcan legibles por otras cuentas.
+            let created = !parent.exists();
             std::fs::create_dir_all(parent)?;
+            if created {
+                crate::infra::file_perms::restrict_to_owner(
+                    parent,
+                    crate::infra::file_perms::Kind::Dir,
+                )?;
+            }
         }
         let argv = keygen_command(&key_path_str, &format!("karto:{node_id}"));
         let status = std::process::Command::new(&argv[0])

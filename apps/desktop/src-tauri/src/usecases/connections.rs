@@ -542,37 +542,45 @@ fn map_cred_row(r: &rusqlite::Row) -> rusqlite::Result<CredRow> {
 /// Si es más permisivo, aborta con un error en vez de conectar con una llave que
 /// podría haber sido leída o manipulada por otro usuario.
 pub fn materialize_key(key_path: &str, private_key: &str) -> AppResult<()> {
-    let path = std::path::Path::new(key_path);
+    use crate::infra::file_perms::{self, Audit, Kind};
+
+    let path = Path::new(key_path);
     if path.exists() {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(path)?.permissions().mode() & 0o777;
-            if mode & 0o077 != 0 {
-                return Err(AppError::Other(format!(
-                    "la llave existente {key_path} tiene permisos {mode:o} (inseguros); \
-                     debe ser 0600. Corrígelos o bórrala para regenerarla"
-                )));
+        return match file_perms::audit(path)? {
+            Audit::Private => Ok(()),
+            Audit::Exposed { detail } => Err(AppError::Other(format!(
+                "la llave existente {key_path} es accesible por otras cuentas ({detail}); \
+                 corrígelo o bórrala para regenerarla"
+            ))),
+            // Windows: leer la DACL exigiría una dependencia nueva de la API del
+            // SO. No se toca el archivo —es del usuario, y apretarle los permisos
+            // en silencio no desharía una exposición previa, sólo la ocultaría—;
+            // queda constancia en el log y, si de verdad está abierta, `ssh` la
+            // rechaza él mismo con "UNPROTECTED PRIVATE KEY FILE".
+            Audit::Unknown => {
+                crate::usecases::diagnostics::warn(
+                    "connection",
+                    "key_perms_unverified",
+                    &[("reason", "la plataforma no permite auditar los permisos")],
+                );
+                Ok(())
             }
-        }
-        return Ok(());
+        };
     }
     if let Some(parent) = path.parent() {
+        // Sólo se restringe el directorio si lo creamos nosotros: si ya existía
+        // es del usuario (p. ej. `~/.ssh`, con sus propios permisos o ACEs), y
+        // reescribírselos sería un efecto colateral que nadie pidió.
+        let created = !parent.exists();
         std::fs::create_dir_all(parent)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            // Directorio privado del usuario (700): las llaves en claro no deben
-            // quedar en un directorio legible por grupo/otros.
-            let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+        if created {
+            file_perms::restrict_to_owner(parent, Kind::Dir)?;
         }
     }
     std::fs::write(path, private_key)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-    }
+    // Debe ir sí o sí: una llave en claro con permisos abiertos no sólo se puede
+    // filtrar, es que `ssh` se niega a usarla.
+    file_perms::restrict_to_owner(path, Kind::File)?;
     Ok(())
 }
 
@@ -1534,5 +1542,83 @@ mod windows_launch {
         // La consola queda esperando el Enter del hold: se cierra aquí.
         let _ = child.kill();
         assert_eq!(got.as_deref().map(str::trim), Some("hola d'a mundo"));
+    }
+}
+
+/// Verificación end-to-end de los permisos de llave en Windows: comprueba que
+/// una llave materializada por Karto en un directorio **hostil** (con `Everyone`
+/// con acceso, heredado) resulta aceptable para el `ssh` del sistema.
+///
+/// Marcada `#[ignore]` porque depende de `ssh-keygen`/`ssh` instalados:
+/// `cargo test --lib windows_key_perms -- --ignored --nocapture`.
+#[cfg(all(test, windows))]
+mod windows_key_perms {
+    use super::*;
+
+    /// `ssh-keygen` **del sistema**, no el que salga del `PATH`. Importa: si hay
+    /// Git para Windows instalado, su `ssh-keygen` es un build MSYS que no hace la
+    /// comprobación de ACL de Windows y aceptaría una llave que el OpenSSH del
+    /// sistema rechaza. La app GUI hereda el PATH del sistema y usa este; el test
+    /// debe medir el mismo binario.
+    fn system_ssh_keygen() -> std::path::PathBuf {
+        std::path::PathBuf::from(std::env::var("SystemRoot").unwrap())
+            .join(r"System32\OpenSSH\ssh-keygen.exe")
+    }
+
+    /// ¿`ssh` aceptaría esta llave? `ssh-keygen -y` hace la misma comprobación de
+    /// permisos que `ssh` al cargar la identidad, sin necesitar servidor.
+    fn ssh_accepts(key: &Path) -> (bool, String) {
+        let out = std::process::Command::new(system_ssh_keygen())
+            .args(["-y", "-f"])
+            .arg(key)
+            .output()
+            .expect("ssh-keygen en el PATH");
+        let combined = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        (!combined.contains("UNPROTECTED"), combined)
+    }
+
+    #[test]
+    #[ignore = "necesita ssh-keygen y toca ACLs reales"]
+    fn key_written_into_a_hostile_dir_is_accepted_by_ssh() {
+        let base = std::env::temp_dir().join(format!("karto-keyperm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        // Directorio hostil: Everyone con lectura, que se hereda a los hijos.
+        let icacls = std::path::PathBuf::from(std::env::var("SystemRoot").unwrap())
+            .join(r"System32\icacls.exe");
+        let st = std::process::Command::new(&icacls)
+            .arg(&base)
+            .args(["/grant", "*S-1-1-0:(OI)(CI)(R)"])
+            .output()
+            .unwrap();
+        assert!(st.status.success(), "no se pudo preparar el directorio hostil");
+
+        // Material de llave real, generado aparte y leído como haría el vault.
+        let seed = base.join("seed");
+        std::process::Command::new(system_ssh_keygen())
+            .args(["-t", "ed25519", "-N", "", "-C", "karto-test", "-q", "-f"])
+            .arg(&seed)
+            .status()
+            .unwrap();
+        let material = std::fs::read_to_string(&seed).unwrap();
+
+        // Control: escrito "a pelo", hereda el Everyone del directorio.
+        let ingenua = base.join("ingenua");
+        std::fs::write(&ingenua, &material).unwrap();
+        let (ok_ingenua, detalle) = ssh_accepts(&ingenua);
+        assert!(!ok_ingenua, "el directorio hostil no lo fue: {detalle}");
+
+        // Lo que hace Karto ahora.
+        let gestionada = base.join("gestionada");
+        materialize_key(&gestionada.to_string_lossy(), &material).unwrap();
+        let (ok_gestionada, detalle) = ssh_accepts(&gestionada);
+        assert!(ok_gestionada, "ssh rechazó la llave materializada: {detalle}");
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
